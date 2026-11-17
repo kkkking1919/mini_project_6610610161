@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="th" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIoT Fall Detection Learning Kit - สื่อการเรียนรู้เทคโนโลยี AIoT สำหรับนักศึกษา</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Prompt', sans-serif; }
+    code, pre { font-family: 'Fira Code', monospace; }
+    .glass {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-indigo-500 selection:text-white">
+
+  <!-- NAVBAR -->
+  <nav class="fixed top-0 left-0 right-0 z-50 glass border-b border-slate-800/80 px-6 py-4">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🥒</span>
+        <div>
+          <span class="font-bold text-lg tracking-wide text-white">Cucumber AIoT</span>
+          <span class="text-xs px-2 py-0.5 ml-2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Learning Kit</span>
+        </div>
+      </div>
+      <div class="hidden md:flex items-center gap-6 text-sm text-slate-300">
+        <a href="#overview" class="hover:text-emerald-400 transition-colors">ภาพรวม</a>
+        <a href="#target" class="hover:text-emerald-400 transition-colors">กลุ่มเป้าหมาย</a>
+        <a href="#architecture" class="hover:text-emerald-400 transition-colors">สถาปัตยกรรม</a>
+        <a href="#hardware" class="hover:text-emerald-400 transition-colors">ฮาร์ดแวร์</a>
+        <a href="#roadmap" class="hover:text-emerald-400 transition-colors">บทเรียนสำหรับ นศ.</a>
+        <a href="#limitations" class="hover:text-emerald-400 transition-colors">ข้อจำกัดของระบบ</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO SECTION -->
+  <header class="pt-36 pb-20 px-6 max-w-5xl mx-auto text-center relative overflow-hidden">
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-6">
+      <i class="fa-solid fa-graduation-cap"></i> สื่อการเรียนรู้สำหรับนักศึกษา (Academic Learning Kit)
+    </div>
+    <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-6">
+      เรียนรู้เทคโนโลยี <span class="gradient-text">AIoT</span> ผ่านโครงงาน<br>
+      ตรวจจับการล้มและบริบทสุขภาพ
+    </h1>
+    <p class="text-base md:text-lg text-slate-400 max-w-3xl mx-auto leading-relaxed mb-8">
+      ชุดทดลองต้นแบบ (Prototype Learning Node) ที่ผสานการประมวลผล <strong>Edge-AI บนบอร์ดไมโครคอนโทรลเลอร์ Cucumber RS (ESP32-S2)</strong> 
+      เข้ากับ <strong>FastAPI Backend</strong>, <strong>Cloudflare Tunneling</strong>, และ <strong>Telegram Mini App & Google Gemini</strong>
+      เพื่อสอนให้นักศึกษาเข้าใจสถาปัตยกรรม AIoT แบบครบวงจร ตั้งแต่ระดับวงจรอิเล็กทรอนิกส์จนถึงการประยุกต์ใช้โมเดลภาษาขนาดใหญ่ (LLM)
+    </p>
+
+    <div class="flex flex-wrap justify-center gap-4 text-sm font-semibold">
+      <a href="#architecture" class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 transition-all flex items-center gap-2">
+        <i class="fa-solid fa-network-wired"></i> สำรวจสถาปัตยกรรมระบบ
+      </a>
+      <a href="#roadmap" class="px-6 py-3 rounded-xl glass hover:bg-slate-800 text-slate-200 transition-all flex items-center gap-2">
+        <i class="fa-solid fa-book-open"></i> แผนการสอน (Curriculum)
+      </a>
+    </div>
+  </header>
+
+  <!-- SECTION: TARGET AUDIENCE & GOAL -->
+  <section id="target" class="py-16 px-6 max-w-5xl mx-auto border-t border-slate-800/80">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-white mb-3">🎯 กลุ่มเป้าหมายและวัตถุประสงค์การเรียนรู้</h2>
+      <p class="text-slate-400 text-sm max-w-2xl mx-auto">
+        ออกแบบเฉพาะสำหรับนักศึกษาระดับปริญญาตรี เพื่อฝึกทักษะการบูรณาการฮาร์ดแวร์ IoT เข้ากับซอฟต์แวร์ Cloud และ AI
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8">
+      <div class="glass p-8 rounded-3xl border border-indigo-500/20 relative">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl mb-5">
+          <i class="fa-solid fa-user-graduate"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-3">กลุ่มเป้าหมาย: นักศึกษา (Higher Education)</h3>
+        <p class="text-slate-400 text-sm leading-relaxed mb-4">
+          เหมาะสำหรับนักศึกษาสาขาวิชาวิศวกรรมคอมพิวเตอร์, เทคโนโลยีสารสนเทศ, วิทยาการคอมพิวเตอร์ หรือวิศวกรรมอิเล็กทรอนิกส์ ที่กำลังศึกษาวิชา:
+        </p>
+        <ul class="space-y-2 text-xs text-slate-300">
+          <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Internet of Things (IoT) & Embedded Systems</li>
+          <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Cloud Computing & RESTful Microservices</li>
+          <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Edge-AI & Signal Processing Fundamentals</li>
+          <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> AI Agent & Large Language Model (LLM) Integration</li>
+        </ul>
+      </div>
+
+      <div class="glass p-8 rounded-3xl border border-emerald-500/20">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl mb-5">
+          <i class="fa-solid fa-bullseye"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-3">วัตถุประสงค์เชิงการเรียนการสอน</h3>
+        <ul class="space-y-3 text-xs text-slate-300">
+          <li class="flex items-start gap-2">
+            <i class="fa-solid fa-arrow-right text-emerald-400 mt-0.5"></i>
+            <span><strong>เข้าใจการแบ่งหน้าที่ (Computation Partitioning):</strong> เข้าใจว่างานส่วนใดควรทำที่ Edge (เพื่อความรวดเร็ว Real-time) และงานส่วนใดควรส่งขึ้น Cloud (วิเคราะห์ข้อมูลเชิงลึก / LLM)</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <i class="fa-solid fa-arrow-right text-emerald-400 mt-0.5"></i>
+            <span><strong>การจัดการ Multi-Tasking บนไมโครคอนโทรลเลอร์:</strong> เรียนรู้การใช้ FreeRTOS Mutex เพื่อแชร์ I2C Bus ระหว่าง Sensor Sampling Task และ Wi-Fi Dispatch Task</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <i class="fa-solid fa-arrow-right text-emerald-400 mt-0.5"></i>
+            <span><strong>การแก้ปัญหา Network ในชีวิตจริง:</strong> การใช้ Cloudflare Tunnel ทะลุข้อจำกัดของ Hotspot AP Isolation และ NAT โดยไม่ต้องใช้ Public Static IP</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: SYSTEM ARCHITECTURE -->
+  <section id="architecture" class="py-16 px-6 max-w-5xl mx-auto border-t border-slate-800/80">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-white mb-3">🏗️ สถาปัตยกรรมระบบ AIoT (System Architecture)</h2>
+      <p class="text-slate-400 text-sm">การเชื่อมต่อครบวงจร 4 ระดับ (4-Tier AIoT Architecture)</p>
+    </div>
+
+    <!-- Architecture Diagram Cards -->
+    <div class="grid md:grid-cols-4 gap-4 mb-10 text-center">
+      <div class="glass p-5 rounded-2xl border-t-4 border-t-amber-500">
+        <div class="text-2xl mb-2">📟</div>
+        <h4 class="font-bold text-white text-sm mb-1">1. Edge Node</h4>
+        <p class="text-xs text-slate-400">บอร์ด Cucumber RS (ESP32-S2) คำนวณความเร่ง 50Hz ตรวจจับการล้ม</p>
+      </div>
+      <div class="glass p-5 rounded-2xl border-t-4 border-t-sky-500">
+        <div class="text-2xl mb-2">☁️</div>
+        <h4 class="font-bold text-white text-sm mb-1">2. Secure Tunnel</h4>
+        <p class="text-xs text-slate-400">Cloudflare Tunnel ส่งข้อมูลปลอดภัยผ่านพอร์ต 443 HTTPS</p>
+      </div>
+      <div class="glass p-5 rounded-2xl border-t-4 border-t-indigo-500">
+        <div class="text-2xl mb-2">⚙️</div>
+        <h4 class="font-bold text-white text-sm mb-1">3. Cloud / Server</h4>
+        <p class="text-xs text-slate-400">FastAPI + Docker + SQLite จัดการ REST API & Context Risk</p>
+      </div>
+      <div class="glass p-5 rounded-2xl border-t-4 border-t-emerald-500">
+        <div class="text-2xl mb-2">💬</div>
+        <h4 class="font-bold text-white text-sm mb-1">4. Intelligent UI</h4>
+        <p class="text-xs text-slate-400">Telegram Bot & Mini App + Google Gemini AI วิเคราะห์สุขภาพ</p>
+      </div>
+    </div>
+
+    <!-- Edge AI Logic explanation -->
+    <div class="glass p-7 rounded-3xl border border-slate-800">
+      <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-microchip text-indigo-400"></i> กลไก Edge-AI: 3-Stage Finite State Machine
+      </h3>
+      <p class="text-xs text-slate-300 leading-relaxed mb-4">
+        เพื่อไม่ให้เกิดภาระกับระบบ Cloud ไมโครคอนโทรลเลอร์จะรัน FreeRTOS Task เพื่อคำนวณ <em>Signal Vector Magnitude (SVM)</em> จากความเร่ง 3 แกน:
+        <code class="px-2 py-0.5 bg-slate-900 rounded text-emerald-400">SVM = √(gx² + gy² + gz²)</code> ด้วยอัตราสุ่ม 50Hz (ทุกๆ 20ms) โดยใช้ State Machine 3 สภาวะ:
+      </p>
+      <div class="grid md:grid-cols-3 gap-3 text-xs">
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+          <span class="font-bold text-amber-400 block mb-1">STAGE 1: Free-fall</span>
+          <p class="text-slate-400">สภาวะทิ้งตัวไร้น้ำหนัก ค่า SVM ลดลงต่ำกว่า <strong>0.70 G</strong></p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+          <span class="font-bold text-rose-400 block mb-1">STAGE 2: Impact Spike</span>
+          <p class="text-slate-400">สภาวะเกิดแรงกระแทกพื้น ค่า SVM พุ่งสูงเกิน <strong>2.00 G</strong> ภายในหน้าต่างเวลา 750ms</p>
+        </div>
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+          <span class="font-bold text-sky-400 block mb-1">STAGE 3: Post-Impact Stillness</span>
+          <p class="text-slate-400">สภาวะนิ่งสงบหลังกระแทก ค่า SVM คืนสู่สภาวะสงบใกล้ 1G นานกว่า 500ms ยืนยันการล้มจริง</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: HARDWARE & SENSORS -->
+  <section id="hardware" class="py-16 px-6 max-w-5xl mx-auto border-t border-slate-800/80">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-white mb-3">🔌 อุปกรณ์ฮาร์ดแวร์ในชุดทดลอง</h2>
+      <p class="text-slate-400 text-sm">การเชื่อมต่อผ่าน I2C Bus ของบอร์ด Cucumber RS (ESP32-S2)</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="glass p-6 rounded-2xl border border-slate-800">
+        <div class="text-3xl mb-3">🧭</div>
+        <h4 class="font-bold text-white text-base mb-1">MPU-6050 (Address: 0x68)</h4>
+        <span class="text-xs text-indigo-400 font-mono block mb-3">6-Axis Motion Tracking</span>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          วัดความเร่ง (Accelerometer ±8G) และความเร็วเชิงมุม (Gyroscope ±500°/s) ใช้เป็นหัวใจหลักในการตรวจจับการล้มแบบ 50Hz
+        </p>
+      </div>
+
+      <div class="glass p-6 rounded-2xl border border-slate-800">
+        <div class="text-3xl mb-3">🌡️</div>
+        <h4 class="font-bold text-white text-base mb-1">HTS221 (Address: 0x5F)</h4>
+        <span class="text-xs text-sky-400 font-mono block mb-3">Temperature & Humidity</span>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          วัดอุณหภูมิและความชื้นสัมพัทธ์ในห้อง ใช้ประเมินความเสี่ยงบริบท (Context Risk) เช่น หากความชื้นสูงกว่า 75% เสี่ยงพื้นลื่นในห้องน้ำ
+        </p>
+      </div>
+
+      <div class="glass p-6 rounded-2xl border border-slate-800">
+        <div class="text-3xl mb-3">🌪️</div>
+        <h4 class="font-bold text-white text-base mb-1">BMP280 (Address: 0x76/0x77)</h4>
+        <span class="text-xs text-emerald-400 font-mono block mb-3">Barometric Pressure</span>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          วัดความกดอากาศระดับความละเอียดสูง ใช้เป็นข้อมูลสภาพแวดล้อมเพื่อเสริมการวิเคราะห์ความเปลี่ยนแปลงของบรรยากาศ
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: LEARNING ROADMAP FOR STUDENTS -->
+  <section id="roadmap" class="py-16 px-6 max-w-5xl mx-auto border-t border-slate-800/80">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-white mb-3">📚 แผนการเรียนรู้สำหรับนักศึกษา (Learning Roadmap)</h2>
+      <p class="text-slate-400 text-sm">ขั้นตอนการศึกษาและฝึกทดลองพัฒนาโครงงานนี้</p>
+    </div>
+
+    <div class="space-y-4">
+      <div class="glass p-6 rounded-2xl border-l-4 border-l-indigo-500 flex gap-4 items-start">
+        <span class="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm shrink-0">1</span>
+        <div>
+          <h4 class="font-bold text-white text-sm mb-1">การเขียนโปรแกรมฝังตัวบน PlatformIO & Arduino</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            ฝึกเขียนโค้ดภาษา C++ เพื่ออ่านค่าจากเซนเซอร์ I2C (MPU-6050, HTS221, BMP280) พร้อมทำความเข้าใจการป้องกันการชนกันของบัสด้วย <code>xSemaphoreCreateMutex()</code> บน FreeRTOS
+          </p>
+        </div>
+      </div>
+
+      <div class="glass p-6 rounded-2xl border-l-4 border-l-sky-500 flex gap-4 items-start">
+        <span class="w-8 h-8 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-sm shrink-0">2</span>
+        <div>
+          <h4 class="font-bold text-white text-sm mb-1">การออกแบบ Backend Microservice ด้วย FastAPI & Docker</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            เรียนรู้การสร้าง REST API Endpoint สำหรับรับ Telemetry, การออกแบบฐานข้อมูลด้วย SQLAlchemy & SQLite, และการแพ็กเกจระบบด้วย Docker Container เพื่อการส่งมอบงานที่ง่ายดาย
+          </p>
+        </div>
+      </div>
+
+      <div class="glass p-6 rounded-2xl border-l-4 border-l-emerald-500 flex gap-4 items-start">
+        <span class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">3</span>
+        <div>
+          <h4 class="font-bold text-white text-sm mb-1">การเชื่อมต่อ LLM (Google Gemini) ในลักษณะ Context-Aware AI</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            เรียนรู้เทคนิคการป้อนบริบทเซนเซอร์สด (Live Context Injection) และประวัติสถิติเข้าไปใน System Instruction เพื่อให้ AI สามารถตอบคำถามสุขภาพและสภาพแวดล้อมได้ตรงตามสถานการณ์จริง
+          </p>
+        </div>
+      </div>
+
+      <div class="glass p-6 rounded-2xl border-l-4 border-l-purple-500 flex gap-4 items-start">
+        <span class="w-8 h-8 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm shrink-0">4</span>
+        <div>
+          <h4 class="font-bold text-white text-sm mb-1">การพัฒนา Telegram Bot & Telegram Mini App</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            ฝึกทำบ็อตสนทนาแบบ Long-Polling และเชื่อมต่อหน้าเว็บ Dashboard แบบ Responsive เข้าสู่ Telegram โดยใช้ Telegram WebApp SDK
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: LIMITATIONS & FUTURE IMPROVEMENTS -->
+  <section id="limitations" class="py-16 px-6 max-w-5xl mx-auto border-t border-slate-800/80">
+    <div class="text-center mb-10">
+      <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+        ข้อวิเคราะห์ทางวิชาการ
+      </span>
+      <h2 class="text-3xl font-bold text-white mt-3 mb-3">⚠️ ข้อจำกัดและแนวทางการพัฒนาสู่การใช้งานจริง</h2>
+      <p class="text-slate-400 text-sm max-w-2xl mx-auto">
+        เนื่องจากระบบนี้เป็น <em>ชุดทดลองต้นแบบสำหรับนักศึกษา (Educational Prototype)</em> จึงยังมีข้อจำกัดที่ควรศึกษาต่อยอด:
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 text-xs text-slate-300">
+      <div class="p-6 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-2">
+        <h4 class="font-bold text-amber-400 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation"></i> 1. อัลกอริทึมการตรวจจับการล้ม (Threshold vs Machine Learning)
+        </h4>
+        <p class="text-slate-400 leading-relaxed">
+          ปัจจุบันระบบใช้ <strong>Heuristic Threshold</strong> (เกณฑ์ SVM คงที่) ซึ่งอาจเกิด False Positive ได้ง่ายหากผู้สวมใส่ทิ้งตัวลงเตียงแรงๆ หรือกระโดด เพื่อนำไปใช้จริงควรพัฒนาเป็น <strong>TinyML (Machine Learning on MCU)</strong> เช่น โมเดล 1D-CNN หรือ Random Forest ที่เทรนบนชุดข้อมูลกิจกรรมจริง (ADL Dataset)
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-2">
+        <h4 class="font-bold text-amber-400 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-battery-half"></i> 2. การจัดการพลังงานและแบตเตอรี่ (Power Management)
+        </h4>
+        <p class="text-slate-400 leading-relaxed">
+          บอร์ด Cucumber RS ที่เชื่อมต่อ Wi-Fi และสุ่มอ่านเซนเซอร์ที่ 50Hz จะใช้กระแสไฟค่อนข้างสูง (120–180mA) การนำไปใช้เป็น Wearable ในชีวิตจริงจำเป็นต้องใช้การจัดการ Deep Sleep, การใช้ Interrupt ปลุกเมื่อมีความเร่ง (Motion Wakeup) หรือเปลี่ยนไปใช้ BLE (Bluetooth Low Energy)
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-2">
+        <h4 class="font-bold text-amber-400 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved"></i> 3. ความน่าเชื่อถือของโครงข่าย (Network Reliability)
+        </h4>
+        <p class="text-slate-400 leading-relaxed">
+          การพึ่งพา Cloudflare Quick Tunnel (โดเมนชั่วคราว) เหมาะสำหรับแล็บทดลองเท่านั้น หากนำไปใช้จริงควรจดโดเมนส่วนตัวและติดตั้ง Named Tunnel ถาวร หรือใช้ MQTT Broker ที่มีระบบ QoS (Quality of Service) เพื่อรับประกันการส่งข้อความฉุกเฉิน
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-2">
+        <h4 class="font-bold text-amber-400 text-sm flex items-center gap-2">
+          <i class="fa-solid fa-box-archive"></i> 4. การออกแบบเชิงกายภาพและมาตรฐานอุปกรณ์ (Form Factor & Safety)
+        </h4>
+        <p class="text-slate-400 leading-relaxed">
+          ฮาร์ดแวร์ปัจจุบันเป็นแผงวงจรเปิด (Development Board) ยังไม่มีเคสกันน้ำกันกระแทก (IP67) ซึ่งหากเกิดการลื่นล้มในห้องน้ำจริงๆ แผงวงจรอาจเสียหายจากน้ำและความชื้นได้
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="py-12 px-6 border-t border-slate-900 text-center text-xs text-slate-500">
+    <p class="mb-2">Cucumber RS - Edge-AIoT Fall Detection Learning Kit for University Students</p>
+    <p>พัฒนาขึ้นเพื่อการศึกษาและการสอนเทคโนโลยี AIoT · Deploy บน GitHub Pages</p>
+  </footer>
+
+</body>
+</html>
