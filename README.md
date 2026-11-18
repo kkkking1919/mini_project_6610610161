@@ -44,7 +44,7 @@
             ▼
 [ User Interfaces (UI) ]
    ├── 💻 Web Dashboard (Tailwind CSS + Chart.js กราฟิกแจ้งเตือนฉุกเฉิน)
-   └── 📱 Telegram Bot (@spiyatidaBot) พร้อมปุ่มเปิด Telegram Mini App
+   └── 📱 Telegram Bot (@bercuncu_bot) พร้อมปุ่มเปิด Telegram Mini App
 ```
 
 ---
@@ -67,7 +67,7 @@
 ### 1. เริ่มต้นระบบเซิร์ฟเวอร์ (Docker & Cloudflare Tunnel)
 1. เปิดโปรแกรม **Docker Desktop** บนคอมพิวเตอร์
 2. ดับเบิลคลิกไฟล์ `start_fastapi_docker.bat` เพื่อสั่งรัน Container:
-   - FastAPI Dashboard จะเปิดที่ `http://localhost:8080` (หรือ Local IP `http://172.20.10.5:8080`)
+   - FastAPI Dashboard จะเปิดที่ `http://localhost:8080` (หรือ Local IP `http://10.4.13.128:8080`)
    - ระบบจะตรวจจับ URL ของ Cloudflare Tunnel และอัปเดตปุ่มเมนู Telegram ให้อัตโนมัติ
 
 ### 2. อัปโหลดโค้ดลงบอร์ด Cucumber RS
@@ -87,7 +87,7 @@
 
 ---
 
-## 💬 การใช้งานผ่าน Telegram Bot (@spiyatidaBot)
+## 💬 การใช้งานผ่าน Telegram Bot (@bercuncu_bot)
 
 ผู้ใช้สามารถสนทนากับ AI "น้องแตงกวา" ได้ทั้งภาษาธรรมชาติและคำสั่งลัด:
 - `ตอนนี้อุณหภูมิเท่าไหร่` : ถามสภาพอากาศและอุณหภูมิห้องจริงจากเซนเซอร์ HTS221
@@ -110,5 +110,5 @@
 ## 🌐 เอกสารเผยแพร่บน GitHub Pages
 
 หน้าเว็บเอกสารการเรียนรู้ฉบับสมบูรณ์ถูกจัดทำไว้ที่โฟลเดอร์ `/docs`:
-- เข้าชมได้ที่: `https://<YOUR_GITHUB_USERNAME>.github.io/<REPO_NAME>/`
+- เข้าชมได้ที่: `https://kkkking1919.github.io/mini_project_6610610161/`
 - การเปิดใช้งาน: ไปที่ GitHub Repository > **Settings** > **Pages** > Branch: **main** > Folder: **/docs** > **Save**

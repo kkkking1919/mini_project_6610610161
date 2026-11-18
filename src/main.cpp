@@ -17,9 +17,9 @@
 const char* ssid = "Double19";
 const char* password = "19191919";
 
-// FastAPI Server Endpoints (Cloudflare Tunnel: ทะลุ Mobile Hotspot และ Windows Firewall ได้ 100%)
-const char* serverUrl_telemetry = "https://broken-enter-recommendations-classroom.trycloudflare.com/api/sensor-data";
-const char* serverUrl_fall      = "https://broken-enter-recommendations-classroom.trycloudflare.com/api/fall-event";
+// FastAPI Server Endpoints (Direct LAN Hotspot IP for Demo Day: Zero-Latency & No Internet dependency)
+const char* serverUrl_telemetry = "http://10.4.13.128:8080/api/sensor-data";
+const char* serverUrl_fall      = "http://10.4.13.128:8080/api/fall-event";
 
 // เซนเซอร์ออนบอร์ด
 Adafruit_HTS221 hts;
@@ -116,7 +116,7 @@ void dispatchFallAlert(float peak_g) {
   } else {
     http.begin(standardClient, serverUrl_fall);
   }
-  http.setTimeout(6000);
+  http.setTimeout(2500);
   http.addHeader("Content-Type", "application/json");
 
   JsonDocument doc;
@@ -179,7 +179,7 @@ void sendRoutineTelemetry() {
   } else {
     http.begin(standardClient, serverUrl_telemetry);
   }
-  http.setTimeout(6000); // Timeout 6 วินาที สำหรับ HTTPS Handshake บน Cloudflare
+  http.setTimeout(2500); // Timeout 6 วินาที สำหรับ HTTPS Handshake บน Cloudflare
   http.addHeader("Content-Type", "application/json");
 
   JsonDocument doc;

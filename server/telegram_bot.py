@@ -206,16 +206,19 @@ class TelegramBotService:
     def _build_status_text(self) -> str:
         s = self.get_sensor_data()
         em = self.get_emergency_status()
-        temp = s.get("temperature", "--")
-        hum = s.get("humidity", "--")
-        press = s.get("pressure", "--")
-        rssi = s.get("rssi", "--")
+        is_conn = s.get("is_connected", False)
+        temp = s.get("temperature", "--") if is_conn else "--"
+        hum = s.get("humidity", "--") if is_conn else "--"
+        press = s.get("pressure", "--") if is_conn else "--"
+        rssi = s.get("rssi", "--") if is_conn else "--"
         updated = s.get("last_updated") or "รอการเชื่อมต่อ..."
         is_em = em.get("active", False)
         em_badge = "🚨 *ตรวจพบการล้ม (EMERGENCY ACTIVE!)*" if is_em else "✅ *ปลอดภัย (ปกติ)*"
+        conn_badge = "🟢 *เชื่อมต่ออยู่ (Online)*" if is_conn else "🔴 *ขาดการเชื่อมต่อ (Offline)*"
 
         return (
-            f"📊 *สถานะเซนเซอร์สดบนบอร์ด Cucumber RS*\n\n"
+            f"📊 *สถานะเซนเซอร์บนบอร์ด Cucumber RS*\n\n"
+            f"📡 *สถานะบอร์ด:* {conn_badge}\n"
             f"🌡️ *อุณหภูมิ (HTS221):* `{temp} °C`\n"
             f"💧 *ความชื้นสัมพัทธ์ (HTS221):* `{hum} %RH`\n"
             f"🌪️ *ความกดอากาศ (BMP280):* `{press} hPa`\n"
@@ -288,8 +291,8 @@ class TelegramBotService:
         last_updated = s.get("last_updated")
         em_status = "🚨 เกิดเหตุการณ์ล้ม (กำลังรอความช่วยเหลือ)" if em.get("active") else "✅ ปกติ ปลอดภัย"
 
-        if not is_conn or not last_updated or temp == 0.0 or temp == "--":
-            sensor_str = "สถานะเซนเซอร์สด: ยังไม่ได้รับข้อมูลสดรอบล่าสุดจากบอร์ด Cucumber RS (สถานะ: รอการเชื่อมต่อ)"
+        if not is_conn or not last_updated:
+            sensor_str = "สถานะเซนเซอร์สด: ⚠️ บอร์ด Cucumber RS ขาดการเชื่อมต่อ (Offline เกิน 15 วินาที) หากผู้ใช้ถามเรื่องสภาพห้องปัจจุบัน ให้แจ้งผู้ใช้ว่าบอร์ดออฟไลน์อยู่"
         else:
             sensor_str = f"ข้อมูลเซนเซอร์สดขณะนี้: อุณหภูมิ {temp} °C (HTS221), ความชื้น {hum} %RH (HTS221), ความกดอากาศ {press} hPa (BMP280), อัปเดตล่าสุด {last_updated}"
 

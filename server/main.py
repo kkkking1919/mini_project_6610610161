@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import init_db, get_db, SessionLocal
-from models import FallEvent, Telemetry, DailySummary
+from models import FallEvent, Telemetry, DailySummary, BANGKOK_TZ, get_bangkok_now_str, get_bangkok_date_str
 from telegram_bot import TelegramBotService
 
 # Initialize SQLite tables
@@ -110,8 +110,9 @@ def get_fall_history_for_bot() -> dict:
     """Query today's and recent fall incidents from SQLite for Telegram Bot."""
     db = SessionLocal()
     try:
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        yesterday_str = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        now_bkk = datetime.now(BANGKOK_TZ)
+        today_str = now_bkk.strftime("%Y-%m-%d")
+        yesterday_str = (now_bkk - timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Today's falls
         today_falls = db.query(FallEvent).filter(FallEvent.timestamp.like(f"{today_str}%")).order_by(FallEvent.id.asc()).all()
@@ -153,7 +154,7 @@ def get_lifestyle_summary_for_bot() -> dict:
     """Query today's telemetry statistics and activity score for Telegram Bot."""
     db = SessionLocal()
     try:
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = get_bangkok_date_str()
         telems = db.query(Telemetry).filter(Telemetry.timestamp.like(f"{today_str}%")).all()
         falls_count = db.query(FallEvent).filter(FallEvent.timestamp.like(f"{today_str}%")).count()
         latest_summary = db.query(DailySummary).order_by(DailySummary.id.desc()).first()
@@ -185,7 +186,7 @@ def get_lifestyle_summary_for_bot() -> dict:
     except Exception as e:
         print(f"[Main] Error querying lifestyle summary: {e}")
         return {
-            "date": datetime.now().strftime("%Y-%m-%d"),
+            "date": get_bangkok_date_str(),
             "score": 85,
             "total_telemetry_samples": 0,
             "avg_temp": "--",
@@ -327,11 +328,16 @@ class TunnelUrlPayload(BaseModel):
     url: str
 
 @app.post("/api/config/tunnel-url")
-async def update_tunnel_url(body: TunnelUrlPayload):
+async def update_tunnel_url(body: TunnelUrlPayload, x_test_mode: Optional[str] = Header(None)):
     global TUNNEL_PUBLIC_URL
     new_url = body.url.strip().rstrip("/")
     if not (new_url.startswith("http://") or new_url.startswith("https://")):
         raise HTTPException(status_code=400, detail="Invalid URL: must start with http:// or https://")
+
+    is_test = x_test_mode and x_test_mode.lower() in ("true", "1", "yes")
+    if is_test:
+        print(f"[Tunnel Sync] 🧪 (TEST MODE) Validation passed for test URL: {new_url}. Skiping .env and setChatMenuButton modification.")
+        return {"status": "success", "message": "Test URL validated (Test Mode - no config altered)", "tunnel_url": new_url}
 
     TUNNEL_PUBLIC_URL = new_url
     print(f"\n[Tunnel Sync] 🌐 New Cloudflare Tunnel URL received: {new_url}")
@@ -419,7 +425,7 @@ async def receive_sensor_data(payload: SensorPayload, db: Session = Depends(get_
             "z": round(payload.gyro.z, 3),
         }
     
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = get_bangkok_now_str()
     latest_data["last_updated"] = timestamp
     latest_data["is_connected"] = True
     print(f"[Telemetry] 📥 Real-time Board Data Received: Temp={latest_data['temperature']}°C, Hum={latest_data['humidity']}%RH, Pres={latest_data['pressure']}hPa")
@@ -461,9 +467,9 @@ async def receive_sensor_data(payload: SensorPayload, db: Session = Depends(get_
     return {"status": "success", "message": "Telemetry received"}
 
 @app.post("/api/fall-event")
-async def receive_fall_event(payload: FallEventPayload, db: Session = Depends(get_db)):
+async def receive_fall_event(payload: FallEventPayload, db: Session = Depends(get_db), x_test_mode: Optional[str] = Header(None)):
     global active_emergency
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = get_bangkok_now_str()
     max_g = round(payload.max_g, 2)
     temp = round(payload.temperature, 2) if payload.temperature is not None else latest_data["temperature"]
     hum = round(payload.humidity, 2) if payload.humidity is not None else latest_data["humidity"]
@@ -478,7 +484,7 @@ async def receive_fall_event(payload: FallEventPayload, db: Session = Depends(ge
     elif max_g >= 3.5:
         risk_level = "⚠️ เสี่ยงสูง: แรงกระแทกสูงรุนแรง (> 3.5G) เฝ้าระวังศีรษะ/กระดูกหัก"
 
-    # Save to SQLite
+    # Save to SQLite (automatically routed to test_fall.db if X-Test-Mode is set)
     event = FallEvent(
         timestamp=timestamp,
         max_g=max_g,
@@ -504,23 +510,38 @@ async def receive_fall_event(payload: FallEventPayload, db: Session = Depends(ge
         "risk": risk_level
     }
 
-    # Dispatch Telegram Alert
-    msg = (
-        f"🚨 *แจ้งเตือนเหตุฉุกเฉิน: ตรวจพบการล้ม (Fall Detected!)*\n\n"
-        f"📅 *เวลา:* `{timestamp}`\n"
-        f"⚡ *แรงกระแทกสูงสุด:* `{max_g} G`\n"
-        f"🌡️ *อุณหภูมิบริบท:* `{temp} °C`\n"
-        f"💧 *ความชื้นบริบท:* `{hum} %RH`\n"
-        f"🌪️ *ความกดอากาศ:* `{press} hPa`\n"
-        f"🔍 *ประเมินบริบท:* {risk_level}\n\n"
-        f"👉 *กรุณาตรวจสอบผู้ใช้งานทันที!*"
-    )
-    await send_telegram_alert(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, msg)
+    is_test = x_test_mode and x_test_mode.lower() in ("true", "1", "yes")
+    if not is_test:
+        # Dispatch Real Telegram Alert
+        msg = (
+            f"🚨 *แจ้งเตือนเหตุฉุกเฉิน: ตรวจพบการล้ม (Fall Detected!)*\n\n"
+            f"📅 *เวลา:* `{timestamp}`\n"
+            f"⚡ *แรงกระแทกสูงสุด:* `{max_g} G`\n"
+            f"🌡️ *อุณหภูมิบริบท:* `{temp} °C`\n"
+            f"💧 *ความชื้นบริบท:* `{hum} %RH`\n"
+            f"🌪️ *ความกดอากาศ:* `{press} hPa`\n"
+            f"🔍 *ประเมินบริบท:* {risk_level}\n\n"
+            f"👉 *กรุณาตรวจสอบผู้ใช้งานทันที!*"
+        )
+        await send_telegram_alert(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, msg)
+    else:
+        print(f"[Fall Alert] 🧪 (TEST MODE - X-Test-Mode) Stored in test_fall.db, skipped real Telegram broadcast.")
 
     return {"status": "success", "event_id": event.id, "risk": risk_level}
 
 @app.get("/api/sensor-data")
 async def get_sensor_data():
+    global latest_data
+    if latest_data.get("last_updated"):
+        try:
+            last_dt = datetime.strptime(latest_data["last_updated"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=BANGKOK_TZ)
+            diff_sec = (datetime.now(BANGKOK_TZ) - last_dt).total_seconds()
+            if diff_sec > 15:
+                latest_data["is_connected"] = False
+        except Exception:
+            pass
+    else:
+        latest_data["is_connected"] = False
     return latest_data
 
 @app.get("/api/emergency-status")
@@ -573,7 +594,7 @@ async def generate_ai_daily_summary(body: AISummaryRequest, db: Session = Depend
     if not api_key:
         raise HTTPException(status_code=400, detail="กรุณาระบุ Google Gemini API Key เพื่อใช้งานฟังก์ชันนี้ครับ")
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = get_bangkok_date_str()
     
     # Query today's telemetry & fall events from SQLite
     telems = db.query(Telemetry).filter(Telemetry.timestamp.like(f"{today_str}%")).all()
@@ -1635,6 +1656,37 @@ async def dashboard_page():
             gyroData.datasets[1].data.push(data.gyro.y);
             gyroData.datasets[2].data.push(data.gyro.z);
             gyroChart.update();
+          }
+        } else {
+          // Board is disconnected / offline (> 15s)
+          document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+          document.getElementById('status-text').textContent = 'ขาดการเชื่อมต่อ (Offline)';
+
+          // Reset gauges to -- / 0
+          document.getElementById('temp-val').textContent = '--';
+          document.getElementById('hum-val').textContent = '--';
+          document.getElementById('hum-status').textContent = 'ไม่มีสัญญาณ';
+          document.getElementById('press-val').textContent = '--';
+          document.getElementById('rssi-val').textContent = '--';
+          document.getElementById('rssi-status').textContent = 'ขาดการเชื่อมต่อ';
+          
+          const ax = document.getElementById('accel-x');
+          if (ax) {
+            document.getElementById('accel-x').textContent = '--';
+            document.getElementById('accel-y').textContent = '--';
+            document.getElementById('accel-z').textContent = '--';
+            document.getElementById('accel-x-bar').style.width = '0%';
+            document.getElementById('accel-y-bar').style.width = '0%';
+            document.getElementById('accel-z-bar').style.width = '0%';
+          }
+          const gx = document.getElementById('gyro-x');
+          if (gx) {
+            document.getElementById('gyro-x').textContent = '--';
+            document.getElementById('gyro-y').textContent = '--';
+            document.getElementById('gyro-z').textContent = '--';
+            document.getElementById('gyro-x-bar').style.width = '0%';
+            document.getElementById('gyro-y-bar').style.width = '0%';
+            document.getElementById('gyro-z-bar').style.width = '0%';
           }
         }
       } catch (err) {
