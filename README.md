@@ -109,6 +109,7 @@
 
 ## 🌐 เอกสารเผยแพร่บน GitHub Pages
 
-หน้าเว็บเอกสารการเรียนรู้ฉบับสมบูรณ์ถูกจัดทำไว้ที่โฟลเดอร์ `/docs`:
-- เข้าชมได้ที่: `https://kkkking1919.github.io/mini_project_6610610161/`
+หน้าเว็บเอกสารการเรียนรู้และแดชบอร์ดจำลองถูกจัดทำไว้ที่โฟลเดอร์ `/docs`:
+- **หน้าหลักโครงการ (Overview & Interactive Demo):** [https://kkkking1919.github.io/mini_project_6610610161/](https://kkkking1919.github.io/mini_project_6610610161/)
+- **หน้าแดชบอร์ดสด (Live Caregiver Dashboard):** [https://kkkking1919.github.io/mini_project_6610610161/dashboard.html](https://kkkking1919.github.io/mini_project_6610610161/dashboard.html)
 - การเปิดใช้งาน: ไปที่ GitHub Repository > **Settings** > **Pages** > Branch: **main** > Folder: **/docs** > **Save**

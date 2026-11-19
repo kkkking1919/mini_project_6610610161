@@ -482,6 +482,11 @@
   </div>
 
   <script>
+    // ---------- API & Endpoint Configuration ----------
+    const isGitHub = window.location.hostname.includes('github.io');
+    const DEFAULT_TUNNEL = 'https://wiring-oxford-chips-november.trycloudflare.com';
+    let API_BASE = isGitHub ? (localStorage.getItem('care_api_base') || DEFAULT_TUNNEL) : '';
+
     // ---------- Helpers ----------
     const $ = (id) => document.getElementById(id);
     const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -728,7 +733,7 @@
     // ---------- Emergency ----------
     async function checkEmergency() {
       try {
-        const res = await fetch('/api/emergency-status');
+        const res = await fetch(`${API_BASE}/api/emergency-status`);
         if (!res.ok) return;
         const em = await res.json();
         const modal = $('emergency-modal');
@@ -753,7 +758,7 @@
     async function resolveEmergency() {
       if (!currentEmergencyId) return;
       try {
-        await fetch(`/api/fall-event/${currentEmergencyId}/resolve`, { method: 'POST' });
+        await fetch(`${API_BASE}/api/fall-event/${currentEmergencyId}/resolve`, { method: 'POST' });
         $('emergency-modal').classList.add('hidden');
         if (sirenInterval) { clearInterval(sirenInterval); sirenInterval = null; }
         emergencyActive = false;
@@ -763,7 +768,7 @@
 
     async function resolveSpecificEvent(id) {
       try {
-        await fetch(`/api/fall-event/${id}/resolve`, { method: 'POST' });
+        await fetch(`${API_BASE}/api/fall-event/${id}/resolve`, { method: 'POST' });
         fetchFallEvents(); checkEmergency();
       } catch (e) { console.error(e); }
     }
@@ -771,7 +776,7 @@
     // ---------- Fall incidents ----------
     async function fetchFallEvents() {
       try {
-        const res = await fetch('/api/fall-events');
+        const res = await fetch(`${API_BASE}/api/fall-events`);
         if (!res.ok) return;
         const data = await res.json();
         const events = data.events || [];
@@ -866,7 +871,7 @@
 
     async function fetchSensorData() {
       try {
-        const res = await fetch('/api/sensor-data');
+        const res = await fetch(`${API_BASE}/api/sensor-data`);
         if (!res.ok) throw new Error('Network error');
         const data = await res.json();
         $('stat-updated').textContent = data.last_updated ? data.last_updated.split(' ')[1] || data.last_updated : '--';
@@ -961,7 +966,7 @@
     }
     async function fetchHistoryData() {
       try {
-        const res = await fetch('/api/history');
+        const res = await fetch(`${API_BASE}/api/history`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.history) { globalHistory = data.history; renderHistoryTable(data.history); }
@@ -979,7 +984,7 @@
     async function clearHistory() {
       if (!confirm('Clear all environment readings from this log?')) return;
       try {
-        await fetch('/api/history/clear', { method: 'POST' });
+        await fetch(`${API_BASE}/api/history/clear`, { method: 'POST' });
         globalHistory = []; renderHistoryTable([]);
       } catch (e) { console.error('Clear error:', e); }
     }
@@ -994,7 +999,7 @@
       placeholder.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[var(--brand)]"></i> Preparing today\'s incident summary…';
       content.classList.add('hidden');
       try {
-        const res = await fetch('/api/ai/daily-summary', {
+        const res = await fetch(`${API_BASE}/api/ai/daily-summary`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ api_key: apiKey || null })
         });
@@ -1015,7 +1020,7 @@
     async function loadLatestSummary() {
       // Earlier summaries may have been written in Thai (e.g. before this dashboard was translated); only show English ones.
       try {
-        const res = await fetch('/api/ai/daily-summary/latest');
+        const res = await fetch(`${API_BASE}/api/ai/daily-summary/latest`);
         if (!res.ok) return;
         const data = await res.json();
         if (data && data.summary && !/[฀-๿]/.test(data.summary)) {
@@ -1034,7 +1039,7 @@
       let cid = localStorage.getItem('tg_chat_id') || '';
       if (!cid) {
         try {
-          const cfg = await (await fetch('/api/config')).json();
+          const cfg = await (await fetch(`${API_BASE}/api/config`)).json();
           if (cfg.telegram_chat_id) { cid = cfg.telegram_chat_id; localStorage.setItem('tg_chat_id', cid); }
         } catch (e) {}
       }
@@ -1056,7 +1061,7 @@
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…';
       out.textContent = 'Contacting Telegram…';
       try {
-        const res = await fetch('/api/telegram/test', {
+        const res = await fetch(`${API_BASE}/api/telegram/test`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: token || null, chat_id: chatId || null })
         });
@@ -1136,7 +1141,7 @@
       const tempId = 'typing-' + Date.now();
       appendAssistantBubble('<span class="muted italic"><i class="fa-solid fa-spinner fa-spin"></i> Thinking…</span>', tempId);
       try {
-        const res = await fetch('/api/chat', {
+        const res = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chat_id: currentChatId, message: text })
         });
@@ -1161,7 +1166,7 @@
     }
     async function loadChatHistory() {
       try {
-        const res = await fetch(`/api/chat/history?chat_id=${encodeURIComponent(currentChatId)}`);
+        const res = await fetch(`${API_BASE}/api/chat/history?chat_id=${encodeURIComponent(currentChatId)}`);
         if (!res.ok) return;
         const data = await res.json();
         isChatHistoryLoaded = true;

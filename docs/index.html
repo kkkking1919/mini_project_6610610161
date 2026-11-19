@@ -72,6 +72,9 @@
       </div>
 
       <div class="flex items-center gap-3">
+        <a href="dashboard.html" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 transition-all">
+          <i class="fa-solid fa-gauge-high text-xs"></i> Live Dashboard
+        </a>
         <a href="https://t.me/bercuncu_bot" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all">
           <i class="fa-brands fa-telegram text-sky-400 text-sm"></i> @bercuncu_bot
         </a>
@@ -94,7 +97,7 @@
     </h1>
     
     <p class="text-base md:text-lg text-slate-400 max-w-3xl mx-auto leading-relaxed mb-8">
-      โครงงานประยุกต์ใช้บอร์ดพกพา <strong>Cucumber RS (ESP32-S2)</strong> ประมวลผลสัญญาณความเร่งจากเซนเซอร์ <strong>MPU-6050</strong> บนตัวชิปโดยตรงแบบ Real-time ด้วยอัลกอริทึม <strong>3-Stage Fall Detection บน FreeRTOS (50Hz)</strong> พร้อมผสานเซนเซอร์ <strong>HTS221 / BMP280</strong> บันทึกบริบทสิ่งแวดล้อม ส่งแจ้งเตือนฉุกเฉิน และมี <strong>Telegram Mini App & Google Gemini AI ("น้องแตงกวา")</strong> วิเคราะห์สุขภาพและดูแลผู้ใช้อย่างใกล้ชิด
+      โครงงานประยุกต์ใช้บอร์ดพกพา <strong>Cucumber RS (ESP32-S2)</strong> ประมวลผลสัญญาณความเร่งจากเซนเซอร์ <strong>MPU-6050</strong> บนตัวชิปโดยตรงแบบ Real-time ด้วยอัลกอริทึม <strong>3-Stage Fall Detection บน FreeRTOS (50Hz)</strong> พร้อมผสานเซนเซอร์ <strong>HTS221 / BMP280</strong> บันทึกบริบทสิ่งแวดล้อม ส่งแจ้งเตือนฉุกเฉิน และมี <strong>Caregiver Dashboard (Telegram Mini App) & Care Assistant AI (Google Gemini)</strong> วิเคราะห์สุขภาพและดูแลผู้ใช้อย่างใกล้ชิด
     </p>
 
     <!-- Key Metrics Grid -->
@@ -112,21 +115,24 @@
       <div class="glass-card p-4 rounded-2xl border-l-4 border-l-sky-500">
         <span class="text-xs text-slate-400 block">ผู้ช่วย AI</span>
         <span class="text-2xl font-bold text-white">Gemini</span>
-        <span class="text-[11px] text-sky-400 mt-1 block">2.5 Flash Context-Aware</span>
+        <span class="text-[11px] text-sky-400 mt-1 block">Care Assistant AI Companion</span>
       </div>
       <div class="glass-card p-4 rounded-2xl border-l-4 border-l-purple-500">
-        <span class="text-xs text-slate-400 block">อินเทอร์เฟซผู้ใช้</span>
-        <span class="text-2xl font-bold text-white">Mini App</span>
-        <span class="text-[11px] text-purple-400 mt-1 block">All-in-One Telegram</span>
+        <span class="text-xs text-slate-400 block">ความหน่วงแสดงผล</span>
+        <span class="text-2xl font-bold text-white font-mono">~1 วินาที</span>
+        <span class="text-[11px] text-purple-400 mt-1 block">Ultra-low Latency Pipeline</span>
       </div>
     </div>
 
     <div class="flex flex-wrap justify-center gap-4 text-sm font-semibold">
+      <a href="dashboard.html" class="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2 border border-emerald-400">
+        <i class="fa-solid fa-gauge-high"></i> เปิดแดชบอร์ดสด (Live Caregiver Dashboard)
+      </a>
       <a href="#interactive-demo" class="px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25 transition-all flex items-center gap-2">
-        <i class="fa-solid fa-gamepad"></i> เปิดห้องทดลองจำลอง (Live Demo)
+        <i class="fa-solid fa-gamepad"></i> ห้องทดลองจำลอง (Simulator Sandbox)
       </a>
       <a href="https://t.me/bercuncu_bot" target="_blank" class="px-6 py-3.5 rounded-2xl glass hover:bg-slate-800 text-sky-300 transition-all flex items-center gap-2 border border-sky-500/30">
-        <i class="fa-brands fa-telegram text-sky-400"></i> เปิดคุยกับบอทบน Telegram
+        <i class="fa-brands fa-telegram text-sky-400"></i> บอท Telegram (@bercuncu_bot)
       </a>
     </div>
   </header>
@@ -223,15 +229,15 @@
         </div>
       </div>
 
-      <!-- Right: Interactive AI Assistant Simulator ("น้องแตงกวา") (5 cols) -->
+      <!-- Right: Interactive AI Assistant Simulator ("Care Assistant") (5 cols) -->
       <div class="lg:col-span-5 glass p-6 md:p-8 rounded-3xl border border-slate-800">
         <div class="flex items-center gap-3 mb-6">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/20">
-            🥒
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/20 text-white">
+            <i class="fa-solid fa-user-nurse"></i>
           </div>
           <div>
             <div class="flex items-center gap-1.5">
-              <h3 class="font-bold text-white text-sm">น้องแตงกวา AI Companion</h3>
+              <h3 class="font-bold text-white text-sm">Care Assistant AI Companion</h3>
               <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
             </div>
             <p class="text-[11px] text-slate-400 font-mono">Google Gemini 2.5 Flash Powered</p>
@@ -241,9 +247,9 @@
         <!-- Chat messages container -->
         <div id="demo-chat-box" class="h-72 overflow-y-auto space-y-3 p-3 bg-slate-900/70 rounded-2xl border border-slate-800/80 text-xs scrollbar-thin">
           <div class="flex gap-2.5 items-start">
-            <div class="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-xs shrink-0 mt-0.5">🥒</div>
+            <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs shrink-0 mt-0.5"><i class="fa-solid fa-user-nurse text-[10px]"></i></div>
             <div class="bg-slate-800 text-slate-200 p-3 rounded-2xl rounded-tl-none border border-slate-700/60 leading-relaxed">
-              สวัสดีค่ะ! หนูน้องแตงกวา ผู้ช่วยดูแลสุขภาพประจำตัวค่ะ หนูคอยเฝ้าระวังการล้มและอ่านค่าเซนเซอร์สดในห้อง ลองแตะหัวข้อด้านล่างเพื่อคุยกับหนูได้เลยนะคะ 😊
+              Hello! I am your <strong>Care Assistant</strong>. I monitor real-time fall events, room environment context, and provide health & caregiving guidance. Tap any topic below or ask me in the live dashboard! 😊
             </div>
           </div>
         </div>
@@ -298,10 +304,10 @@
 
       <div class="glass p-6 rounded-2xl border-t-4 border-t-sky-500 relative">
         <span class="text-3xl mb-3 block">🛡️</span>
-        <h4 class="font-bold text-white text-base mb-1">2. Secure Tunnel</h4>
-        <span class="text-xs text-sky-400 font-mono block mb-2">Cloudflare Quick Tunnel</span>
+        <h4 class="font-bold text-white text-base mb-1">2. Dual-Route Network</h4>
+        <span class="text-xs text-sky-400 font-mono block mb-2">Direct LAN + Cloudflare Tunnel</span>
         <p class="text-xs text-slate-400 leading-relaxed">
-          เชื่อมโยงพอร์ต 8080 ในเครื่องออกสู่ HTTPS สาธารณะ ทะลุไฟร์วอลล์และ AP Isolation ของหอพักหรือมหาวิทยาลัย
+          ส่งตรงเข้า LAN IP (10ms Zero-latency) พร้อมระบบ Auto-Fallback สลับไป Cloudflare Tunnel ทันทีเมื่ออยู่นอกสถานที่
         </p>
       </div>
 
@@ -316,10 +322,10 @@
 
       <div class="glass p-6 rounded-2xl border-t-4 border-t-emerald-500 relative">
         <span class="text-3xl mb-3 block">📱</span>
-        <h4 class="font-bold text-white text-base mb-1">4. Conversational TMA</h4>
-        <span class="text-xs text-emerald-400 font-mono block mb-2">Telegram Mini App & Gemini</span>
+        <h4 class="font-bold text-white text-base mb-1">4. Caregiver TMA</h4>
+        <span class="text-xs text-emerald-400 font-mono block mb-2">Caregiver Dashboard & Gemini</span>
         <p class="text-xs text-slate-400 leading-relaxed">
-          แอปบน Telegram รวม Dashboard และ Chatbot สองทาง จดจำบริบทการคุย และส่งเสียงไซเรนฉุกเฉิน
+          แดชบอร์ดธีมเขียว-ขาวสำหรับผู้ดูแล พร้อมสถานะ Wearer, กราฟแยกอุณหภูมิ/ความชื้น และ Care Assistant AI
         </p>
       </div>
     </div>
@@ -365,10 +371,10 @@
         All-in-One Telegram Experience
       </span>
       <h2 class="text-3xl md:text-4xl font-extrabold text-white mt-3 mb-2">
-        📱 Telegram Mini App (TMA) สะดวกสบายในแอปเดียว
+        📱 Telegram Mini App & Caregiver Dashboard สะดวกสบายในแอปเดียว
       </h2>
       <p class="text-slate-400 text-sm max-w-2xl mx-auto">
-        รวมทั้ง แดชบอร์ดเรียลไทม์ และ ห้องแชทสนทนากับ AI น้องแตงกวา ไว้ในหน้าจอเดียว ไม่ต้องเปิดเบราว์เซอร์แยก
+        รวมทั้ง แดชบอร์ดเรียลไทม์ และ ห้องแชทสนทนากับ Care Assistant AI ไว้ในหน้าจอเดียว ไม่ต้องเปิดเบราว์เซอร์แยก
       </p>
     </div>
 
@@ -387,55 +393,56 @@
           </div>
           
           <!-- App Header -->
-          <div class="px-3 py-2 bg-slate-950/80 rounded-xl mx-1 border border-slate-800/60 flex items-center justify-between">
+          <div class="px-3 py-2 bg-emerald-950/40 rounded-xl mx-1 border border-emerald-500/20 flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span class="text-lg">🥒</span>
+              <span class="text-lg">🛡️</span>
               <div>
-                <span class="text-xs font-bold text-white block">Cucumber Mini App</span>
+                <span class="text-xs font-bold text-white block">Caregiver Dashboard</span>
                 <span class="text-[9px] text-emerald-400">● Live Connected</span>
               </div>
             </div>
-            <span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-mono">TMA</span>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-semibold">TMA</span>
           </div>
 
           <!-- App Mock Content -->
           <div class="flex-1 p-2 space-y-2 overflow-hidden my-2">
-            <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-[11px]">
-              <div class="flex justify-between text-slate-400 mb-1">
-                <span>Acceleration SVM</span>
-                <span class="text-emerald-400 font-bold">1.02 G</span>
+            <!-- Wearer Status Card -->
+            <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px]">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-emerald-400 font-bold flex items-center gap-1">
+                  <i class="fa-solid fa-shield-heart"></i> Wearer is safe
+                </span>
+                <span class="text-[10px] text-emerald-300 font-mono">Resting</span>
               </div>
-              <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
-                <div class="bg-emerald-400 h-full w-1/3"></div>
-              </div>
+              <p class="text-[10px] text-slate-300">Monitoring normally. Alerts trigger automatically upon fall.</p>
             </div>
 
             <div class="grid grid-cols-2 gap-2 text-[10px]">
               <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700/60">
-                <span class="text-slate-400 block">อุณหภูมิห้อง</span>
-                <span class="text-xs font-bold text-white">28.4 °C</span>
+                <span class="text-slate-400 block">Body Impact</span>
+                <span class="text-xs font-bold text-emerald-400">1.02 G</span>
               </div>
               <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700/60">
-                <span class="text-slate-400 block">ความชื้นสัมพัทธ์</span>
-                <span class="text-xs font-bold text-white">65.2 %</span>
+                <span class="text-slate-400 block">Room Temp</span>
+                <span class="text-xs font-bold text-white">28.4 °C</span>
               </div>
             </div>
 
-            <div class="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-[10px]">
-              <span class="text-indigo-300 font-bold block mb-1">💬 แชทน้องแตงกวา AI</span>
-              <p class="text-slate-300 line-clamp-2">"วันนี้อากาศค่อนข้างร้อน แนะนำให้ดื่มน้ำให้เพียงพอนะคะ"</p>
+            <div class="p-2.5 rounded-xl bg-emerald-900/20 border border-emerald-500/30 text-[10px]">
+              <span class="text-emerald-300 font-bold block mb-1">💬 Care Assistant (AI)</span>
+              <p class="text-slate-300 line-clamp-2">"Temperature and humidity are within the normal range. Wearer is safe and comfortable."</p>
             </div>
           </div>
 
           <!-- Bottom Tab Navigation -->
           <div class="grid grid-cols-2 gap-1 p-1.5 bg-slate-950 rounded-2xl border border-slate-800 text-[10px] text-center">
-            <div class="py-1.5 rounded-xl bg-indigo-600/30 text-indigo-300 font-bold flex flex-col items-center">
+            <div class="py-1.5 rounded-xl bg-emerald-600/30 text-emerald-300 font-bold flex flex-col items-center">
               <i class="fa-solid fa-chart-line text-xs mb-0.5"></i>
-              <span>แดชบอร์ด</span>
+              <span>Dashboard</span>
             </div>
             <div class="py-1.5 rounded-xl text-slate-400 flex flex-col items-center hover:text-white">
-              <i class="fa-solid fa-comments text-xs mb-0.5"></i>
-              <span>น้องแตงกวา</span>
+              <i class="fa-solid fa-user-nurse text-xs mb-0.5"></i>
+              <span>Care Assistant</span>
             </div>
           </div>
         </div>
@@ -446,16 +453,26 @@
         <div class="glass p-6 rounded-2xl border-l-4 border-l-sky-500">
           <h4 class="font-bold text-white text-base mb-1">ปุ่มเมนูถาวร (Persistent Menu Button)</h4>
           <p class="text-xs text-slate-400 leading-relaxed">
-            มีปุ่ม <code>📱 เปิดแอปสุขภาพ</code> ติดไว้ข้างช่องพิมพ์ข้อความของบอท [@bercuncu_bot] ผู้ใช้แตะเพียงครั้งเดียว แอปจะเปิดขึ้นมาเต็มหน้าจอทันทีโดยไม่ต้องจำคำสั่ง
+            มีปุ่ม <code>📱 Open Dashboard</code> ติดไว้ข้างช่องพิมพ์ข้อความของบอท [@bercuncu_bot] ผู้ใช้แตะเพียงครั้งเดียว แอปจะเปิดขึ้นมาเต็มหน้าจอทันทีโดยไม่ต้องจำคำสั่ง
+          </p>
+        </div>
+
+        <div class="glass p-6 rounded-2xl border-l-4 border-l-emerald-500">
+          <h4 class="font-bold text-white text-base mb-1">สลับหน้าจอง่ายดาย (Bottom Tab Navigation)</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            สลับระหว่างแท็บ <strong>[📊 Dashboard]</strong> เพื่อดูเกจวัดความเร่ง กราฟแยกอุณหภูมิ/ความชื้น และแท็บ <strong>[💬 Care Assistant]</strong> เพื่อขอคำแนะนำด้านโภชนาการ การออกกำลังกาย หรือสรุปเหตุการณ์ล้มได้ทันที
           </p>
         </div>
 
         <div class="glass p-6 rounded-2xl border-l-4 border-l-indigo-500">
-          <h4 class="font-bold text-white text-base mb-1">สลับหน้าจอง่ายดาย (Bottom Tab Navigation)</h4>
+          <h4 class="font-bold text-white text-base mb-1">ความหน่วงต่ำระดับวินาที (~1s Latency)</h4>
           <p class="text-xs text-slate-400 leading-relaxed">
-            สลับระหว่างแท็บ <strong>[📊 แดชบอร์ด]</strong> เพื่อดูเกจวัดความเร่งและกราฟ และแท็บ <strong>[💬 น้องแตงกวา AI]</strong> เพื่อขอคำแนะนำด้านโภชนาการ การออกกำลังกาย หรือสภาพอากาศได้ทันที
+            ระบบประมวลผลและส่งต่อสัญญาณความเร็วสูง อัปเดตข้อมูลเซนเซอร์บนแดชบอร์ดอย่างต่อเนื่อง แจ้งเตือนฉุกเฉินและส่งเสียงไซเรนทันทีที่เกิดเหตุการณ์
           </p>
         </div>
+      </div>
+    </div>
+  </section>
 
         <div class="glass p-6 rounded-2xl border-l-4 border-l-emerald-500">
           <h4 class="font-bold text-white text-base mb-1">ความจำการสนทนารวมศูนย์ (Unified Memory)</h4>
@@ -775,11 +792,11 @@
 
       // Typing simulation
       setTimeout(() => {
-        const replyText = demoResponses[question] || 'น้องแตงกวายินดีให้คำปรึกษาเรื่องสุขภาพเสมอค่ะ สามารถเปิดคุยตัวเต็มได้ที่บอท @bercuncu_bot นะคะ';
+        const replyText = demoResponses[question] || 'Care Assistant is always here to help with health and safety! You can open the live Caregiver Dashboard or chat with @bercuncu_bot.';
         const aiDiv = document.createElement('div');
         aiDiv.className = 'flex gap-2.5 items-start';
         aiDiv.innerHTML = `
-          <div class="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-xs shrink-0 mt-0.5">🥒</div>
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs shrink-0 mt-0.5"><i class="fa-solid fa-user-nurse text-[10px]"></i></div>
           <div class="bg-slate-800 text-slate-200 p-3 rounded-2xl rounded-tl-none border border-slate-700/60 leading-relaxed max-w-[90%]">
             ${marked.parse(replyText)}
           </div>
