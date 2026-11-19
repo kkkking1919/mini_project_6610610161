@@ -169,9 +169,21 @@ class TelegramBotService:
         """Return memory turns for a specific chat_id."""
         return self.chat_histories.get(chat_id, [])
 
-    async def ask_gemini(self, chat_id: str, user_text: str) -> str:
-        """Unified method for processing text through commands and Gemini with live context."""
+    async def ask_gemini(self, chat_id: str, user_text: str, language: str = "th") -> str:
+        """Unified method for processing text through commands and Gemini with live context.
+
+        language="en" is used by the English caregiver web dashboard: replies come back in
+        English from a neutral "Care Assistant" persona. Telegram keeps the default ("th").
+        """
         cmd = user_text.lower().split()[0] if user_text else ""
+        is_en = (language or "th").lower().startswith("en")
+
+        if is_en:
+            if cmd == "/clear":
+                self.chat_histories[chat_id] = []
+                return "🧹 Conversation cleared. You can start a new question now."
+            sensor_context = self._format_sensor_context(self.get_sensor_data(), self.get_emergency_status())
+            return await self._call_gemini_chat(chat_id, user_text, user_text, sensor_context, language="en")
 
         if cmd == "/status":
             return self._build_status_text()
@@ -355,10 +367,11 @@ class TelegramBotService:
             }
         await self.send_reply(chat_id, msg, reply_markup=reply_markup)
 
-    async def _call_gemini_chat(self, chat_id: str, query_for_ai: str, original_user_text: str, sensor_context: str) -> str:
+    async def _call_gemini_chat(self, chat_id: str, query_for_ai: str, original_user_text: str, sensor_context: str, language: str = "th") -> str:
         """Call Google Gemini 2.5 Flash with multi-turn memory and live sensor context."""
+        is_en = (language or "th").lower().startswith("en")
         if not self.gemini_api_key:
-            return "ขออภัยครับ ยังไม่ได้ตั้งค่า Google Gemini API Key ในระบบ"
+            return "Sorry, the Google Gemini API key has not been configured." if is_en else "ขออภัยครับ ยังไม่ได้ตั้งค่า Google Gemini API Key ในระบบ"
 
         if chat_id not in self.chat_histories:
             self.chat_histories[chat_id] = []
@@ -386,6 +399,23 @@ class TelegramBotService:
    - หากผู้ใช้ถามเรื่องอากาศ อุณหภูมิ ร้อนไหม ในห้องเป็นอย่างไร: ให้นำตัวเลขจริงจากข้อมูลเซนเซอร์สดมาตอบ
 4. ด้านอื่นๆ (อาหาร, ออกกำลังกาย): ให้คำแนะนำสั้นๆ มีประโยชน์ เข้าใจง่าย
 5. รูปแบบการตอบ: ใช้ภาษาไทยที่สุภาพ อ่านง่าย กระชับ ใช้ emoji ประกอบอย่างพอเหมาะ จัดข้อความเป็น Bullet points ให้อ่านสบายตา"""
+
+        if is_en:
+            system_instruction = f"""You are the "Care Assistant" for the Cucumber RS wearable fall-detection system.
+You support CAREGIVERS (family members, nurses, care staff) who look after the person wearing the device ("the wearer").
+Tone: calm, warm, professional and concise. Never call yourself by any other name.
+
+Live sensor data, real fall statistics and today's daily-living data from the database (may be written in Thai - translate as needed):
+{sensor_context}
+
+How to answer:
+1. Falls: when asked how many falls happened, when, or how severe - answer from the fall statistics above in 1-2 short lines
+   (count, time, impact in G). If there were falls, advise the caregiver to check on the wearer. If none, say today has been safe.
+2. Daily wellbeing: summarise the activity score and average room temperature/humidity in 2-3 lines, plus one practical tip.
+3. Room environment: use the real live sensor numbers. If the device is offline, say so clearly.
+4. Other topics (fall prevention, exercise, nutrition, home safety): short, practical advice a caregiver can act on.
+   Do not diagnose; recommend contacting a medical professional when symptoms sound serious.
+5. Format: reply in English only, short bullet points, sparing use of emoji."""
 
         contents = []
         for turn in history[-8:]:
@@ -423,6 +453,10 @@ class TelegramBotService:
 
                     return ai_reply
                 else:
+                    if is_en:
+                        return f"Sorry, the AI service is temporarily unavailable (code {res.status_code})."
                     return f"ขออภัยครับ ระบบ AI ขัดข้องชั่วคราว (Code: {res.status_code})"
         except Exception as e:
+            if is_en:
+                return f"Sorry, there was a problem contacting the AI service: {str(e)}"
             return f"ขออภัยครับ เกิดข้อผิดพลาดในการติดต่อ AI: {str(e)}"

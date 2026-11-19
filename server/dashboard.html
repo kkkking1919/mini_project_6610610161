@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Caregiver Dashboard</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f2f8f4;
+      --card: #ffffff;
+      --border: #dcebe2;
+      --border-strong: #c6dfd0;
+      --ink: #10241b;
+      --ink-2: #4a5f55;
+      --muted: #84968d;
+      --brand: #047857;
+      --brand-600: #059669;
+      --brand-50: #ecfdf5;
+      --brand-100: #d1fae5;
+      --grid: #e6efe9;
+      --good: #0ca30c;
+      --warning: #fab219;
+      --critical: #d03b3b;
+      --series-temp: #eb6834;
+      --series-hum: #2a78d6;
+      --series-motion: #047857;
+      --series-rot: #6250d6;
+    }
+    html, body { background: var(--page); }
+    body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 1px 2px rgba(16, 36, 27, 0.04), 0 4px 16px rgba(16, 36, 27, 0.04); }
+    .ink-2 { color: var(--ink-2); }
+    .muted { color: var(--muted); }
+    .tnum { font-variant-numeric: tabular-nums; }
+    .section-title { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+    .chip { display: inline-flex; align-items: center; gap: .375rem; padding: .25rem .625rem; border-radius: 9999px; font-size: .75rem; font-weight: 600; }
+    .chip-good { background: #e7f7e7; color: #0a6b0a; }
+    .chip-warn { background: #fff5dc; color: #7a5200; }
+    .chip-crit { background: #fdeaea; color: #a32626; }
+    .chip-neutral { background: #eef3f0; color: var(--ink-2); }
+    .seg { display: inline-flex; background: #eef5f1; border: 1px solid var(--border); border-radius: 10px; padding: 2px; }
+    .seg button { padding: .25rem .65rem; font-size: .75rem; font-weight: 600; color: var(--ink-2); border-radius: 8px; }
+    .seg button.active { background: #fff; color: var(--brand); box-shadow: 0 1px 2px rgba(16,36,27,.08); }
+    .emergency-glow { animation: emergencyPulse 1.2s infinite alternate; }
+    @keyframes emergencyPulse {
+      0% { box-shadow: 0 0 0 4px rgba(208, 59, 59, 0.15), 0 20px 50px rgba(208, 59, 59, 0.2); }
+      100% { box-shadow: 0 0 0 10px rgba(208, 59, 59, 0.25), 0 20px 60px rgba(208, 59, 59, 0.35); }
+    }
+    .prose-care p { margin: .4rem 0; }
+    .prose-care ul { list-style: disc; padding-left: 1.2rem; margin: .4rem 0; }
+    .prose-care ol { list-style: decimal; padding-left: 1.2rem; margin: .4rem 0; }
+    .prose-care li { margin: .2rem 0; }
+    .prose-care strong { color: var(--ink); }
+    .legend-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #c6dfd0; border-radius: 9999px; }
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] .chev { transform: rotate(180deg); }
+  </style>
+</head>
+<body class="min-h-screen pb-24">
+
+  <!-- EMERGENCY ALERT MODAL -->
+  <div id="emergency-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#10241b]/60 backdrop-blur-sm">
+    <div class="emergency-glow max-w-lg w-full rounded-3xl bg-white overflow-hidden border-2 border-[#d03b3b]">
+      <div class="bg-[#d03b3b] text-white px-6 py-5 flex items-center gap-4">
+        <div class="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl animate-bounce">
+          <i class="fa-solid fa-person-falling-burst"></i>
+        </div>
+        <div>
+          <div class="text-[11px] font-bold uppercase tracking-widest opacity-90">Emergency alert</div>
+          <h2 class="text-2xl font-extrabold leading-tight">Fall detected</h2>
+          <p class="text-sm opacity-90">Please check on the wearer immediately.</p>
+        </div>
+      </div>
+      <div class="p-6 space-y-4">
+        <div class="flex items-center gap-2 text-sm ink-2">
+          <i class="fa-regular fa-clock"></i> <span id="emergency-time" class="tnum font-medium">-</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div class="rounded-xl bg-[#fdeaea] p-3">
+            <div class="text-[11px] font-semibold text-[#a32626] uppercase">Impact</div>
+            <div id="emergency-g" class="text-lg font-bold tnum text-[#10241b]">-- G</div>
+          </div>
+          <div class="rounded-xl bg-[#f2f8f4] p-3">
+            <div class="text-[11px] font-semibold ink-2 uppercase">Room temp</div>
+            <div id="emergency-temp" class="text-lg font-bold tnum">-- °C</div>
+          </div>
+          <div class="rounded-xl bg-[#f2f8f4] p-3">
+            <div class="text-[11px] font-semibold ink-2 uppercase">Humidity</div>
+            <div id="emergency-hum" class="text-lg font-bold tnum">-- %</div>
+          </div>
+        </div>
+        <div>
+          <div class="text-xs font-semibold ink-2 mb-1">Risk assessment</div>
+          <div id="emergency-risk" class="p-3 rounded-xl bg-[#fdeaea] text-[#7f1d1d] text-sm font-medium">--</div>
+        </div>
+        <button onclick="resolveEmergency()" class="w-full py-3 rounded-xl bg-[#d03b3b] hover:bg-[#b83030] text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors">
+          <i class="fa-solid fa-check"></i> I've checked on the wearer — acknowledge
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b" style="border-color: var(--border)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-[var(--brand)] text-white flex items-center justify-center text-lg shadow-sm">
+          <i class="fa-solid fa-heart-pulse"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold leading-tight">Caregiver Dashboard</h1>
+          <p class="text-xs muted">Wearable fall monitoring · Cucumber RS</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span id="tma-badge" class="hidden chip chip-neutral"><i class="fa-brands fa-telegram text-[#2a9ad6]"></i> Telegram Mini App</span>
+        <a href="https://t.me/bercuncu_bot" target="_blank" rel="noopener" title="Open the alert bot in Telegram" class="chip chip-neutral hover:bg-[#e2ece6] transition-colors">
+          <i class="fa-brands fa-telegram text-[#2a9ad6]"></i> Alerts: @bercuncu_bot
+        </a>
+        <button onclick="openConfigModal()" class="chip chip-neutral hover:bg-[#e2ece6] transition-colors">
+          <i class="fa-solid fa-gear"></i> Settings
+        </button>
+        <div class="chip bg-white border" style="border-color: var(--border)">
+          <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-[#84968d]"></span>
+          <span id="status-text" class="ink-2">Connecting…</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ===================== TAB 1: DASHBOARD ===================== -->
+    <div id="view-dashboard" class="space-y-6">
+
+      <!-- WEARER STATUS HERO -->
+      <section id="hero" class="card p-5 sm:p-6 border-l-[6px]" style="border-left-color: var(--muted)">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div class="flex items-center gap-4">
+            <div id="hero-icon" class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl bg-[#eef3f0] text-[#4a5f55]">
+              <i class="fa-solid fa-hourglass-half"></i>
+            </div>
+            <div>
+              <div class="text-xs font-semibold uppercase tracking-wider muted">Wearer status</div>
+              <h2 id="hero-title" class="text-2xl font-extrabold leading-tight">Checking…</h2>
+              <p id="hero-sub" class="text-sm ink-2">Waiting for the first reading from the wearable device.</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:min-w-[560px]">
+            <div class="rounded-xl bg-[var(--brand-50)] px-4 py-3">
+              <div class="text-[11px] font-semibold uppercase ink-2">Falls today</div>
+              <div id="stat-falls-today" class="text-2xl font-bold tnum">0</div>
+            </div>
+            <div class="rounded-xl bg-[var(--brand-50)] px-4 py-3">
+              <div class="text-[11px] font-semibold uppercase ink-2">Awaiting check</div>
+              <div id="stat-pending" class="text-2xl font-bold tnum">0</div>
+            </div>
+            <div class="rounded-xl bg-[var(--brand-50)] px-4 py-3">
+              <div class="text-[11px] font-semibold uppercase ink-2">Activity now</div>
+              <div id="stat-activity" class="text-base font-bold mt-1">--</div>
+            </div>
+            <div class="rounded-xl bg-[var(--brand-50)] px-4 py-3">
+              <div class="text-[11px] font-semibold uppercase ink-2">Last update</div>
+              <div id="stat-updated" class="text-base font-bold tnum mt-1">--</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MOVEMENT SECTION -->
+      <section class="space-y-4">
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <h2 class="section-title flex items-center gap-2"><i class="fa-solid fa-person-walking text-[var(--brand)]"></i> Wearer movement</h2>
+            <p class="text-xs muted">Live motion from the wearable's motion sensor · last 60 seconds</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="card p-4">
+            <div class="text-xs font-semibold ink-2">Activity level</div>
+            <div id="mv-level" class="text-xl font-bold mt-1">--</div>
+            <div id="mv-level-note" class="text-xs muted mt-1">Based on the last 5 seconds</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs font-semibold ink-2">Body acceleration</div>
+            <div class="mt-1"><span id="mv-g" class="text-2xl font-bold tnum">--</span> <span class="text-sm muted">g</span></div>
+            <div class="text-xs muted mt-1">1.0 g ≈ standing or sitting still</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs font-semibold ink-2">Rotation rate</div>
+            <div class="mt-1"><span id="mv-rot" class="text-2xl font-bold tnum">--</span> <span class="text-sm muted">rad/s</span></div>
+            <div class="text-xs muted mt-1">How fast the body is turning</div>
+          </div>
+          <div class="card p-4">
+            <div class="text-xs font-semibold ink-2">Last movement</div>
+            <div id="mv-last" class="text-xl font-bold mt-1 tnum">--</div>
+            <div class="text-xs muted mt-1">Since this page was opened</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="card p-5">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 class="font-semibold">Body acceleration</h3>
+                <p id="accel-caption" class="text-xs muted">Total acceleration in g, with fall-detection thresholds</p>
+              </div>
+              <div class="seg" role="tablist" aria-label="Acceleration view">
+                <button id="seg-overall" class="active" onclick="setAccelView('overall')">Overall</button>
+                <button id="seg-axes" onclick="setAccelView('axes')">By axis</button>
+              </div>
+            </div>
+            <div class="h-64"><canvas id="accelChart" aria-label="Body acceleration chart" role="img"></canvas></div>
+          </div>
+          <div class="card p-5">
+            <div class="mb-3">
+              <h3 class="font-semibold">Rotation rate</h3>
+              <p class="text-xs muted">Overall turning speed of the body, rad/s</p>
+            </div>
+            <div class="h-64"><canvas id="gyroChart" aria-label="Rotation rate chart" role="img"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ENVIRONMENT SECTION -->
+      <section class="space-y-4">
+        <div>
+          <h2 class="section-title flex items-center gap-2"><i class="fa-solid fa-house-chimney-medical text-[var(--brand)]"></i> Room environment</h2>
+          <p class="text-xs muted">Conditions around the wearer · last 60 seconds</p>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-semibold ink-2">Temperature</div>
+              <i class="fa-solid fa-temperature-half" style="color: var(--series-temp)"></i>
+            </div>
+            <div class="mt-1"><span id="temp-val" class="text-2xl font-bold tnum">--</span> <span class="text-sm muted">°C</span></div>
+            <div id="temp-status" class="mt-2"><span class="chip chip-neutral">--</span></div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-semibold ink-2">Humidity</div>
+              <i class="fa-solid fa-droplet" style="color: var(--series-hum)"></i>
+            </div>
+            <div class="mt-1"><span id="hum-val" class="text-2xl font-bold tnum">--</span> <span class="text-sm muted">%RH</span></div>
+            <div id="hum-status" class="mt-2"><span class="chip chip-neutral">--</span></div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-semibold ink-2">Air pressure</div>
+              <i class="fa-solid fa-gauge muted"></i>
+            </div>
+            <div class="mt-1"><span id="press-val" class="text-2xl font-bold tnum">--</span> <span class="text-sm muted">hPa</span></div>
+            <div class="text-xs muted mt-2">Sea level ≈ 1013 hPa</div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-semibold ink-2">Room conditions</div>
+              <i class="fa-solid fa-house muted"></i>
+            </div>
+            <div id="room-summary" class="text-base font-bold mt-1">--</div>
+            <div id="room-note" class="text-xs muted mt-2">Waiting for data</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="card p-5">
+            <div class="mb-3">
+              <h3 class="font-semibold">Temperature</h3>
+              <p class="text-xs muted">°C · shaded band = comfortable range (20–28 °C)</p>
+            </div>
+            <div class="h-56"><canvas id="tempChart" aria-label="Room temperature chart" role="img"></canvas></div>
+          </div>
+          <div class="card p-5">
+            <div class="mb-3">
+              <h3 class="font-semibold">Humidity</h3>
+              <p class="text-xs muted">%RH · above 75% the floor may be slippery</p>
+            </div>
+            <div class="h-56"><canvas id="humChart" aria-label="Room humidity chart" role="img"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FALL INCIDENT LOG -->
+      <section class="card p-5 space-y-4">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <h2 class="section-title flex items-center gap-2"><i class="fa-solid fa-triangle-exclamation text-[var(--critical)]"></i> Fall incidents</h2>
+            <p class="text-xs muted">Every detected fall, with the room conditions at that moment</p>
+          </div>
+          <button onclick="fetchFallEvents()" class="chip chip-neutral hover:bg-[#e2ece6]"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+        </div>
+        <div class="overflow-x-auto max-h-80 rounded-xl border" style="border-color: var(--border)">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead class="bg-[var(--brand-50)] sticky top-0 z-10 text-xs ink-2">
+              <tr>
+                <th class="py-2.5 px-4 font-semibold">Time</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Impact</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Temp</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Humidity</th>
+                <th class="py-2.5 px-4 font-semibold">Risk assessment</th>
+                <th class="py-2.5 px-4 font-semibold">Status</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="fall-tbody" class="divide-y" style="--tw-divide-opacity:1; border-color: var(--border)">
+              <tr><td colspan="7" class="py-8 text-center muted">No falls recorded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- AI INCIDENT SUMMARY -->
+      <section class="card p-5 space-y-4">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-[var(--brand-50)] text-[var(--brand)] flex items-center justify-center">
+              <i class="fa-solid fa-file-waveform"></i>
+            </div>
+            <div>
+              <h2 class="section-title">Daily incident summary</h2>
+              <p class="text-xs muted">A short AI-written report of today's falls and the conditions at the time</p>
+            </div>
+          </div>
+          <button onclick="generateAISummary()" id="ai-generate-btn" class="px-4 py-2 rounded-xl bg-[var(--brand)] hover:bg-[#065f46] text-white text-sm font-semibold flex items-center gap-2 transition-colors">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Generate summary
+          </button>
+        </div>
+        <div id="ai-summary-box" class="p-4 rounded-xl bg-[var(--brand-50)] border text-sm leading-relaxed min-h-[90px]" style="border-color: var(--border)">
+          <div id="ai-placeholder" class="text-center py-4 muted text-sm">
+            Press <b>Generate summary</b> to get a brief report of today's incidents.
+          </div>
+          <div id="ai-content" class="hidden prose-care ink-2"></div>
+        </div>
+      </section>
+
+      <!-- ENVIRONMENT HISTORY TABLE -->
+      <details class="card p-5">
+        <summary class="flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <h2 class="section-title flex items-center gap-2"><i class="fa-solid fa-table-list text-[var(--brand)]"></i> Environment readings log <i class="fa-solid fa-chevron-down chev text-xs muted transition-transform"></i></h2>
+            <p class="text-xs muted">Most recent 100 readings from the device</p>
+          </div>
+          <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+            <button onclick="exportCSV()" class="chip bg-[var(--brand)] text-white hover:bg-[#065f46]"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+            <button onclick="clearHistory()" class="chip chip-neutral hover:bg-[#fdeaea] hover:text-[#a32626]"><i class="fa-solid fa-trash"></i> Clear</button>
+          </div>
+        </summary>
+        <div class="overflow-x-auto max-h-96 rounded-xl border mt-4" style="border-color: var(--border)">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead class="bg-[var(--brand-50)] sticky top-0 z-10 text-xs ink-2">
+              <tr>
+                <th class="py-2.5 px-4 font-semibold">Time</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Temp (°C)</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Humidity (%RH)</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Pressure (hPa)</th>
+                <th class="py-2.5 px-4 font-semibold text-right">Wi-Fi (dBm)</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody" class="tnum">
+              <tr><td colspan="5" class="py-8 text-center muted">Waiting for readings from the device…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <p class="text-center text-xs muted pb-2">Sensors: HTS221 (temperature, humidity) · BMP280 (pressure) · MPU-6050 (motion) · Wi-Fi signal <span id="rssi-footer" class="tnum">--</span> dBm</p>
+    </div>
+    <!-- ===================== END DASHBOARD ===================== -->
+
+    <!-- ===================== TAB 2: CARE ASSISTANT ===================== -->
+    <div id="view-chat" class="hidden max-w-3xl mx-auto flex flex-col h-[calc(100vh-150px)] min-h-[500px] card overflow-hidden">
+      <div class="px-5 py-3.5 border-b flex justify-between items-center flex-shrink-0 bg-white" style="border-color: var(--border)">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-[var(--brand)] text-white flex items-center justify-center text-lg">
+            <i class="fa-solid fa-user-nurse"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold">Care Assistant</h2>
+            <p class="text-xs muted">Ask about the wearer, today's falls or the room conditions</p>
+          </div>
+        </div>
+        <button onclick="clearChatMemory()" title="Clear conversation" class="chip chip-neutral hover:bg-[#e2ece6]">
+          <i class="fa-solid fa-broom"></i> <span class="hidden sm:inline">Clear chat</span>
+        </button>
+      </div>
+
+      <div class="px-4 py-2 border-b overflow-x-auto whitespace-nowrap flex gap-2 flex-shrink-0 bg-[var(--brand-50)]" style="border-color: var(--border)">
+        <button onclick="sendQuickPrompt('Have there been any falls today? How serious were they?')" class="chip bg-white border hover:border-[var(--brand)] flex-shrink-0" style="border-color: var(--border)">🚨 Falls today</button>
+        <button onclick="sendQuickPrompt('Is the room comfortable and safe for the wearer right now?')" class="chip bg-white border hover:border-[var(--brand)] flex-shrink-0" style="border-color: var(--border)">🌡️ Room conditions</button>
+        <button onclick="sendQuickPrompt('Give me a short summary of the wearer\'s day so far.')" class="chip bg-white border hover:border-[var(--brand)] flex-shrink-0" style="border-color: var(--border)">📋 Daily summary</button>
+        <button onclick="sendQuickPrompt('Suggest two simple exercises to help prevent falls for an older adult.')" class="chip bg-white border hover:border-[var(--brand)] flex-shrink-0" style="border-color: var(--border)">🏃 Fall prevention</button>
+      </div>
+
+      <div id="chat-messages-box" class="flex-1 p-4 sm:p-5 overflow-y-auto space-y-4 text-sm bg-[#fafdfb]">
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-[var(--brand-100)] text-[var(--brand)] flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-user-nurse text-xs"></i></div>
+          <div class="bg-white border rounded-2xl rounded-tl-none p-3.5 max-w-[85%] leading-relaxed ink-2" style="border-color: var(--border)">
+            Hello! I'm the <b>Care Assistant</b>. I can tell you about today's falls, the room conditions around the wearer, and practical fall-prevention tips. Tap a suggestion above or type your question.
+          </div>
+        </div>
+      </div>
+
+      <div class="p-3 border-t flex-shrink-0 bg-white" style="border-color: var(--border)">
+        <form id="chat-form" onsubmit="handleChatSubmit(event)" class="flex items-center gap-2">
+          <input type="text" id="chat-input" placeholder="Type a question for the Care Assistant…" autocomplete="off" class="flex-1 px-4 py-2.5 rounded-xl bg-[var(--page)] border text-sm focus:outline-none focus:border-[var(--brand)]" style="border-color: var(--border)">
+          <button type="submit" id="chat-send-btn" class="w-10 h-10 rounded-xl bg-[var(--brand)] hover:bg-[#065f46] text-white flex items-center justify-center flex-shrink-0" aria-label="Send">
+            <i class="fa-solid fa-paper-plane text-sm"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+    <!-- ===================== END CARE ASSISTANT ===================== -->
+  </main>
+
+  <!-- BOTTOM NAVIGATION -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t px-6 py-2 flex justify-around items-center max-w-md mx-auto sm:rounded-t-2xl sm:border-x shadow-lg" style="border-color: var(--border)">
+    <button onclick="switchTab('dashboard')" id="nav-btn-dashboard" class="flex flex-col items-center gap-1 px-4 py-1 rounded-xl text-[var(--brand)]">
+      <i class="fa-solid fa-chart-line text-lg"></i>
+      <span class="text-[11px] font-semibold">Dashboard</span>
+    </button>
+    <button onclick="switchTab('chat')" id="nav-btn-chat" class="flex flex-col items-center gap-1 px-4 py-1 rounded-xl text-[#84968d]">
+      <i class="fa-solid fa-user-nurse text-lg"></i>
+      <span class="text-[11px] font-semibold">Care Assistant</span>
+    </button>
+  </nav>
+
+  <!-- SETTINGS MODAL -->
+  <div id="config-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#10241b]/50 backdrop-blur-sm">
+    <div class="card max-w-lg w-full p-6 space-y-4">
+      <div class="flex justify-between items-center pb-3 border-b" style="border-color: var(--border)">
+        <h3 class="text-base font-bold flex items-center gap-2"><i class="fa-solid fa-sliders text-[var(--brand)]"></i> AI & Telegram alert settings</h3>
+        <button onclick="closeConfigModal()" class="muted hover:text-[#10241b]" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="space-y-4 text-sm">
+        <div>
+          <label for="gemini-key-input" class="font-medium block mb-1">Google Gemini API key</label>
+          <input type="password" id="gemini-key-input" placeholder="AIzaSy…" class="w-full px-3 py-2 rounded-xl bg-[var(--page)] border font-mono text-xs focus:outline-none focus:border-[var(--brand)]" style="border-color: var(--border)">
+          <span class="text-xs muted">Optional — used for the daily incident summary. Leave blank to use the server key.</span>
+        </div>
+        <div>
+          <label for="tg-token-input" class="font-medium block mb-1">Telegram bot token</label>
+          <input type="password" id="tg-token-input" placeholder="123456789:AAG…" class="w-full px-3 py-2 rounded-xl bg-[var(--page)] border font-mono text-xs focus:outline-none focus:border-[var(--brand)]" style="border-color: var(--border)">
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label for="tg-chat-input" class="font-medium">Telegram chat ID (auto-detected)</label>
+            <a href="https://t.me/bercuncu_bot" target="_blank" rel="noopener" class="text-xs text-[var(--brand)] hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open @bercuncu_bot</a>
+          </div>
+          <input type="text" id="tg-chat-input" placeholder="Detected after you press Start in the bot" class="w-full px-3 py-2 rounded-xl bg-[var(--page)] border font-mono text-xs focus:outline-none focus:border-[var(--brand)]" style="border-color: var(--border)">
+          <span class="text-xs muted block mt-1">No chat ID yet? Open the bot link above, press <b>Start</b>, then send a test alert below.</span>
+        </div>
+        <div class="p-3 rounded-xl bg-[var(--brand-50)] border space-y-2" style="border-color: var(--border)">
+          <div class="flex justify-between items-center gap-2">
+            <span class="text-xs font-medium ink-2">Send a test alert to Telegram</span>
+            <button onclick="testTelegramAlert()" id="test-tg-btn" class="px-3 py-1.5 rounded-lg bg-[var(--brand)] hover:bg-[#065f46] text-white font-medium text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-paper-plane"></i> Send test
+            </button>
+          </div>
+          <div id="tg-test-result" class="text-xs ink-2"></div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-3 border-t" style="border-color: var(--border)">
+        <button onclick="closeConfigModal()" class="px-4 py-2 rounded-xl chip-neutral font-semibold text-xs">Cancel</button>
+        <button onclick="saveConfig()" class="px-4 py-2 rounded-xl bg-[var(--brand)] hover:bg-[#065f46] text-white font-semibold text-xs">Save settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Helpers ----------
+    const $ = (id) => document.getElementById(id);
+    const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const G = 9.80665;
+    const WINDOW = 60; // samples (≈ 1 per second)
+
+    function escapeHtml(text) {
+      const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+      return String(text ?? '').replace(/[&<>"']/g, m => map[m]);
+    }
+    function chip(kind, icon, label) {
+      return `<span class="chip chip-${kind}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
+    }
+    function bangkokToday() {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+    }
+    function fmtTime(d) {
+      return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    function fmtAgo(sec) {
+      if (sec < 5) return 'Just now';
+      if (sec < 60) return `${Math.round(sec)} s ago`;
+      if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+      return `${Math.floor(sec / 3600)} h ago`;
+    }
+
+    // Backend stores the risk assessment in Thai (it is also sent to Telegram). Translate for this English dashboard.
+    function translateRisk(risk) {
+      const r = String(risk || '');
+      if (r.includes('ความชื้น')) return { level: 'crit', text: 'Very high risk — unusually high humidity; possible slip on a wet or bathroom floor' };
+      if (r.includes('อุณหภูมิ')) return { level: 'crit', text: 'High risk — unusually high temperature; possible heat stroke or fainting' };
+      if (r.includes('3.5')) return { level: 'crit', text: 'High risk — severe impact (over 3.5 G); check for head injury or fractures' };
+      if (r.includes('ปานกลาง')) return { level: 'warn', text: 'Moderate risk — fall impact detected' };
+      return { level: 'warn', text: r || 'Fall detected' };
+    }
+
+    // ---------- Siren (Web Audio) ----------
+    let sirenInterval = null;
+    function playSirenSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'sawtooth';
+        const now = audioCtx.currentTime;
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.linearRampToValueAtTime(1200, now + 0.35);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.7);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.9);
+        osc.start(now); osc.stop(now + 0.9);
+      } catch (e) { console.error('Audio error:', e); }
+    }
+
+    // ---------- Charts ----------
+    Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = css('--muted');
+
+    // Draws horizontal reference lines / bands configured under options.plugins.refLines
+    const refLinesPlugin = {
+      id: 'refLines',
+      beforeDatasetsDraw(chart, args, opts) {
+        const { ctx, chartArea, scales } = chart;
+        const y = scales.y;
+        if (!opts || !y || !chartArea) return;
+        ctx.save();
+        (opts.bands || []).forEach(b => {
+          const top = y.getPixelForValue(b.to), bottom = y.getPixelForValue(b.from);
+          ctx.fillStyle = b.color;
+          ctx.fillRect(chartArea.left, Math.max(top, chartArea.top), chartArea.right - chartArea.left,
+                       Math.min(bottom, chartArea.bottom) - Math.max(top, chartArea.top));
+        });
+        (opts.lines || []).forEach(l => {
+          if (l.value < y.min || l.value > y.max) return;
+          const py = y.getPixelForValue(l.value);
+          ctx.strokeStyle = l.color; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+          ctx.beginPath(); ctx.moveTo(chartArea.left, py); ctx.lineTo(chartArea.right, py); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = l.textColor || css('--ink-2');
+          ctx.font = "600 10px 'Inter', system-ui, sans-serif";
+          ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+          ctx.fillText(l.label, chartArea.right - 4, py - 2);
+        });
+        ctx.restore();
+      }
+    };
+    Chart.register(refLinesPlugin);
+
+    function baseOptions(unit, extra = {}) {
+      return {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        interaction: { mode: 'index', intersect: false },
+        elements: { point: { radius: 0, hoverRadius: 4, hitRadius: 12 }, line: { borderWidth: 2, tension: 0.3 } },
+        scales: {
+          x: { grid: { display: false }, border: { color: css('--border-strong') }, ticks: { maxTicksLimit: 6, maxRotation: 0 } },
+          y: { grid: { color: css('--grid') }, border: { display: false }, ticks: { maxTicksLimit: 6 }, ...(extra.y || {}) }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#ffffff', titleColor: css('--ink'), bodyColor: css('--ink-2'),
+            borderColor: css('--border-strong'), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+            callbacks: { label: (c) => ` ${c.dataset.label}: ${c.parsed.y == null ? '--' : c.parsed.y.toFixed(2)} ${unit}` }
+          },
+          refLines: extra.refLines || {}
+        }
+      };
+    }
+    function lineDataset(label, color, fill = false) {
+      return { label, data: [], borderColor: color, backgroundColor: fill ? color + '1a' : color, fill, pointBackgroundColor: color, pointBorderColor: '#fff', pointBorderWidth: 2 };
+    }
+
+    const tempChart = new Chart($('tempChart'), {
+      type: 'line',
+      data: { labels: [], datasets: [lineDataset('Temperature', css('--series-temp'))] },
+      options: baseOptions('°C', { y: { suggestedMin: 18, suggestedMax: 34 },
+        refLines: { bands: [{ from: 20, to: 28, color: 'rgba(4, 120, 87, 0.07)' }] } })
+    });
+    const humChart = new Chart($('humChart'), {
+      type: 'line',
+      data: { labels: [], datasets: [lineDataset('Humidity', css('--series-hum'))] },
+      options: baseOptions('%RH', { y: { suggestedMin: 30, suggestedMax: 90 },
+        refLines: { lines: [{ value: 75, label: 'Slip risk 75%', color: css('--critical'), textColor: '#a32626' }] } })
+    });
+
+    const accelRefLines = { lines: [
+      { value: 2.0, label: 'Impact threshold 2.0 g', color: css('--critical'), textColor: '#a32626' },
+      { value: 1.0, label: 'At rest 1.0 g', color: css('--muted') },
+      { value: 0.7, label: 'Free-fall 0.7 g', color: '#c98500', textColor: '#7a5200' }
+    ]};
+    const accelChart = new Chart($('accelChart'), {
+      type: 'line',
+      data: { labels: [], datasets: [lineDataset('Acceleration', css('--series-motion'), true)] },
+      options: baseOptions('g', { y: { suggestedMin: 0, suggestedMax: 2.5 }, refLines: accelRefLines })
+    });
+    const gyroChart = new Chart($('gyroChart'), {
+      type: 'line',
+      data: { labels: [], datasets: [lineDataset('Rotation', css('--series-rot'), true)] },
+      options: baseOptions('rad/s', { y: { suggestedMin: 0, suggestedMax: 2 } })
+    });
+
+    // Rolling buffers so the acceleration chart can switch views without losing history
+    const buf = { labels: [], g: [], ax: [], ay: [], az: [] };
+    let accelView = 'overall';
+
+    function setAccelView(view) {
+      accelView = view;
+      $('seg-overall').classList.toggle('active', view === 'overall');
+      $('seg-axes').classList.toggle('active', view === 'axes');
+      if (view === 'overall') {
+        accelChart.data.datasets = [lineDataset('Acceleration', css('--series-motion'), true)];
+        accelChart.options.plugins.refLines = accelRefLines;
+        accelChart.options.plugins.legend.display = false;
+        accelChart.options.scales.y.suggestedMin = 0; accelChart.options.scales.y.suggestedMax = 2.5;
+        accelChart.options.plugins.tooltip.callbacks.label = (c) => ` ${c.dataset.label}: ${c.parsed.y.toFixed(2)} g`;
+        $('accel-caption').textContent = 'Total acceleration in g, with fall-detection thresholds';
+      } else {
+        accelChart.data.datasets = [
+          lineDataset('X axis', '#2a78d6'), lineDataset('Y axis', '#eb6834'), lineDataset('Z axis', '#1baf7a')
+        ];
+        accelChart.options.plugins.refLines = {};
+        accelChart.options.plugins.legend.display = true;
+        accelChart.options.plugins.legend.position = 'top';
+        accelChart.options.plugins.legend.align = 'end';
+        accelChart.options.plugins.legend.labels = { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 3, color: css('--ink-2') };
+        accelChart.options.scales.y.suggestedMin = -12; accelChart.options.scales.y.suggestedMax = 12;
+        accelChart.options.plugins.tooltip.callbacks.label = (c) => ` ${c.dataset.label}: ${c.parsed.y.toFixed(2)} m/s²`;
+        $('accel-caption').textContent = 'Acceleration on each axis of the device, m/s²';
+      }
+      redrawAccel();
+    }
+    function redrawAccel() {
+      accelChart.data.labels = buf.labels.slice();
+      if (accelView === 'overall') {
+        accelChart.data.datasets[0].data = buf.g.slice();
+      } else {
+        accelChart.data.datasets[0].data = buf.ax.slice();
+        accelChart.data.datasets[1].data = buf.ay.slice();
+        accelChart.data.datasets[2].data = buf.az.slice();
+      }
+      accelChart.update('none');
+    }
+    function pushPoint(chart, label, value) {
+      chart.data.labels.push(label);
+      chart.data.datasets[0].data.push(value);
+      if (chart.data.labels.length > WINDOW) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); }
+      chart.update('none');
+    }
+
+    // ---------- State ----------
+    let globalHistory = [];
+    let currentEmergencyId = null;
+    let emergencyActive = false;
+    let deviceOnline = null;
+    let fallsToday = 0;
+    let pendingFalls = 0;
+    let lastMovementAt = null;
+    const recentMotion = []; // {dev, rot}
+    let lastSampleKey = null;
+
+    // ---------- Status hero ----------
+    function renderHero() {
+      const hero = $('hero'), icon = $('hero-icon'), title = $('hero-title'), sub = $('hero-sub');
+      let color, iconHtml, iconCls, t, s;
+      if (emergencyActive) {
+        color = css('--critical'); iconCls = 'bg-[#fdeaea] text-[#d03b3b]'; iconHtml = 'fa-person-falling-burst';
+        t = 'Fall detected — check on the wearer now'; s = 'An emergency alert is active. Acknowledge it once you have checked on the wearer.';
+      } else if (deviceOnline === false) {
+        color = '#c98500'; iconCls = 'bg-[#fff5dc] text-[#7a5200]'; iconHtml = 'fa-plug-circle-xmark';
+        t = 'Device offline'; s = 'No data for over 15 seconds — the wearer is not being monitored. Check the device battery and Wi-Fi.';
+      } else if (pendingFalls > 0) {
+        color = '#c98500'; iconCls = 'bg-[#fff5dc] text-[#7a5200]'; iconHtml = 'fa-bell';
+        t = `${pendingFalls} fall alert${pendingFalls > 1 ? 's' : ''} awaiting acknowledgment`; s = 'Review the fall incidents below and acknowledge them once handled.';
+      } else if (deviceOnline === true) {
+        color = css('--brand'); iconCls = 'bg-[var(--brand-50)] text-[var(--brand)]'; iconHtml = 'fa-shield-heart';
+        t = 'Wearer is safe'; s = 'Monitoring normally. You will be alerted here and on Telegram if a fall is detected.';
+      } else {
+        color = css('--muted'); iconCls = 'bg-[#eef3f0] text-[#4a5f55]'; iconHtml = 'fa-hourglass-half';
+        t = 'Checking…'; s = 'Waiting for the first reading from the wearable device.';
+      }
+      hero.style.borderLeftColor = color;
+      icon.className = `w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${iconCls}`;
+      icon.innerHTML = `<i class="fa-solid ${iconHtml}"></i>`;
+      title.textContent = t; sub.textContent = s;
+      $('stat-falls-today').textContent = fallsToday;
+      $('stat-pending').textContent = pendingFalls;
+    }
+
+    // ---------- Emergency ----------
+    async function checkEmergency() {
+      try {
+        const res = await fetch('/api/emergency-status');
+        if (!res.ok) return;
+        const em = await res.json();
+        const modal = $('emergency-modal');
+        emergencyActive = !!em.active;
+        if (em.active) {
+          currentEmergencyId = em.id;
+          $('emergency-time').textContent = em.timestamp;
+          $('emergency-g').textContent = em.max_g + ' G';
+          $('emergency-temp').textContent = em.temperature + ' °C';
+          $('emergency-hum').textContent = em.humidity + ' %';
+          $('emergency-risk').textContent = translateRisk(em.risk).text;
+          modal.classList.remove('hidden');
+          if (!sirenInterval) { playSirenSound(); sirenInterval = setInterval(playSirenSound, 1200); }
+        } else {
+          modal.classList.add('hidden');
+          if (sirenInterval) { clearInterval(sirenInterval); sirenInterval = null; }
+        }
+        renderHero();
+      } catch (e) { console.error('Emergency check error:', e); }
+    }
+
+    async function resolveEmergency() {
+      if (!currentEmergencyId) return;
+      try {
+        await fetch(`/api/fall-event/${currentEmergencyId}/resolve`, { method: 'POST' });
+        $('emergency-modal').classList.add('hidden');
+        if (sirenInterval) { clearInterval(sirenInterval); sirenInterval = null; }
+        emergencyActive = false;
+        fetchFallEvents();
+      } catch (e) { console.error('Resolve error:', e); }
+    }
+
+    async function resolveSpecificEvent(id) {
+      try {
+        await fetch(`/api/fall-event/${id}/resolve`, { method: 'POST' });
+        fetchFallEvents(); checkEmergency();
+      } catch (e) { console.error(e); }
+    }
+
+    // ---------- Fall incidents ----------
+    async function fetchFallEvents() {
+      try {
+        const res = await fetch('/api/fall-events');
+        if (!res.ok) return;
+        const data = await res.json();
+        const events = data.events || [];
+        const today = bangkokToday();
+        fallsToday = events.filter(e => String(e.timestamp).startsWith(today)).length;
+        pendingFalls = events.filter(e => e.status === 'PENDING').length;
+        renderHero();
+
+        const tbody = $('fall-tbody');
+        if (events.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center muted"><i class="fa-solid fa-shield-heart text-[var(--brand)]"></i> No falls recorded.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = events.map(e => {
+          const risk = translateRisk(e.context_risk);
+          const riskChip = risk.level === 'crit' ? chip('crit', 'fa-circle-exclamation', 'High') : chip('warn', 'fa-triangle-exclamation', 'Moderate');
+          const pending = e.status === 'PENDING';
+          const status = pending ? chip('crit', 'fa-bell', 'Needs check') : chip('good', 'fa-circle-check', 'Acknowledged');
+          const action = pending
+            ? `<button onclick="resolveSpecificEvent(${Number(e.id)})" class="px-3 py-1 rounded-lg bg-[var(--brand)] hover:bg-[#065f46] text-white text-xs font-semibold">Acknowledge</button>`
+            : '<span class="muted text-xs">Done</span>';
+          return `
+            <tr class="border-t hover:bg-[#f7fbf8]" style="border-color: var(--border)">
+              <td class="py-2.5 px-4 tnum whitespace-nowrap">${escapeHtml(e.timestamp)}</td>
+              <td class="py-2.5 px-4 tnum text-right font-semibold whitespace-nowrap">${escapeHtml(e.max_g)} G</td>
+              <td class="py-2.5 px-4 tnum text-right whitespace-nowrap">${escapeHtml(e.temperature)} °C</td>
+              <td class="py-2.5 px-4 tnum text-right whitespace-nowrap">${escapeHtml(e.humidity)} %</td>
+              <td class="py-2.5 px-4 text-xs ink-2 min-w-[260px]"><div class="flex items-start gap-2">${riskChip}<span>${escapeHtml(risk.text)}</span></div></td>
+              <td class="py-2.5 px-4 whitespace-nowrap">${status}</td>
+              <td class="py-2.5 px-4 text-right">${action}</td>
+            </tr>`;
+        }).join('');
+      } catch (err) { console.error('Fetch fall events error:', err); }
+    }
+
+    // ---------- Environment status ----------
+    function tempStatus(t) {
+      if (t < 20) return chip('warn', 'fa-snowflake', 'Cool');
+      if (t <= 28) return chip('good', 'fa-circle-check', 'Comfortable');
+      if (t <= 32) return chip('warn', 'fa-glass-water', 'Warm — keep hydrated');
+      return chip('crit', 'fa-temperature-arrow-up', 'Hot — heat risk');
+    }
+    function humStatus(h) {
+      if (h < 30) return chip('warn', 'fa-wind', 'Dry');
+      if (h <= 60) return chip('good', 'fa-circle-check', 'Comfortable');
+      if (h < 75) return chip('warn', 'fa-droplet', 'Humid');
+      return chip('crit', 'fa-person-falling', 'Slippery-floor risk');
+    }
+    function roomSummary(t, h) {
+      const issues = [];
+      if (h >= 75) issues.push('very humid — watch for wet floors');
+      else if (h > 60) issues.push('humid');
+      if (t > 32) issues.push('hot — offer water');
+      else if (t > 28) issues.push('warm');
+      else if (t < 20) issues.push('cool');
+      if (issues.length === 0) return { title: '<span class="text-[var(--brand)]"><i class="fa-solid fa-circle-check"></i> Comfortable</span>', note: 'Temperature and humidity are within the normal range.' };
+      const serious = h >= 75 || t > 32;
+      return {
+        title: serious ? '<span class="text-[#a32626]"><i class="fa-solid fa-circle-exclamation"></i> Needs attention</span>'
+                       : '<span class="text-[#7a5200]"><i class="fa-solid fa-triangle-exclamation"></i> Fair</span>',
+        note: 'Room is ' + issues.join(', ') + '.'
+      };
+    }
+    function rssiText(r) {
+      if (r >= -50) return 'excellent'; if (r >= -60) return 'good'; if (r >= -70) return 'fair'; if (r >= -80) return 'weak'; return 'very weak';
+    }
+
+    // ---------- Movement ----------
+    function activityFromRecent() {
+      if (recentMotion.length === 0) return null;
+      const avgDev = recentMotion.reduce((a, m) => a + m.dev, 0) / recentMotion.length;
+      const avgRot = recentMotion.reduce((a, m) => a + m.rot, 0) / recentMotion.length;
+      if (avgDev < 0.08 && avgRot < 0.3) return { label: 'Resting', icon: 'fa-couch', cls: 'text-[#4a5f55]', note: 'Little or no movement' };
+      if (avgDev < 0.35 && avgRot < 1.5) return { label: 'Light activity', icon: 'fa-person-walking', cls: 'text-[var(--brand)]', note: 'e.g. walking, small movements' };
+      return { label: 'Active', icon: 'fa-person-running', cls: 'text-[var(--brand)]', note: 'Strong or fast movement' };
+    }
+
+    function setOffline() {
+      $('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-[#c98500]';
+      $('status-text').textContent = 'Device offline';
+      ['temp-val', 'hum-val', 'press-val', 'mv-g', 'mv-rot'].forEach(id => $(id).textContent = '--');
+      $('temp-status').innerHTML = chip('neutral', 'fa-plug-circle-xmark', 'No signal');
+      $('hum-status').innerHTML = chip('neutral', 'fa-plug-circle-xmark', 'No signal');
+      $('room-summary').textContent = '--';
+      $('room-note').textContent = 'Device offline';
+      $('mv-level').textContent = '--';
+      $('mv-level-note').textContent = 'Device offline';
+      $('stat-activity').textContent = '--';
+      $('rssi-footer').textContent = '--';
+      recentMotion.length = 0;
+    }
+
+    async function fetchSensorData() {
+      try {
+        const res = await fetch('/api/sensor-data');
+        if (!res.ok) throw new Error('Network error');
+        const data = await res.json();
+        $('stat-updated').textContent = data.last_updated ? data.last_updated.split(' ')[1] || data.last_updated : '--';
+
+        if (!(data.is_connected && data.last_updated)) {
+          deviceOnline = false; setOffline(); renderHero(); return;
+        }
+        deviceOnline = true;
+        $('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-[#0ca30c] animate-pulse';
+        $('status-text').textContent = 'Device online';
+
+        // Environment
+        const t = Number(data.temperature), h = Number(data.humidity), p = Number(data.pressure);
+        $('temp-val').textContent = t.toFixed(1);
+        $('hum-val').textContent = h.toFixed(1);
+        $('press-val').textContent = p.toFixed(1);
+        $('temp-status').innerHTML = tempStatus(t);
+        $('hum-status').innerHTML = humStatus(h);
+        const rs = roomSummary(t, h);
+        $('room-summary').innerHTML = rs.title;
+        $('room-note').textContent = rs.note;
+        $('rssi-footer').textContent = `${data.rssi} (${rssiText(data.rssi)})`;
+
+        // Movement
+        const a = data.accel || { x: 0, y: 0, z: 0 };
+        const gy = data.gyro || { x: 0, y: 0, z: 0 };
+        const gForce = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z) / G;
+        const rot = Math.sqrt(gy.x * gy.x + gy.y * gy.y + gy.z * gy.z);
+        $('mv-g').textContent = gForce.toFixed(2);
+        $('mv-rot').textContent = rot.toFixed(2);
+
+        // Only append to charts when the device has produced a new sample
+        const sampleKey = data.last_updated + '|' + a.x + '|' + a.y + '|' + a.z + '|' + t + '|' + h;
+        if (sampleKey !== lastSampleKey) {
+          lastSampleKey = sampleKey;
+          const label = fmtTime(new Date());
+          pushPoint(tempChart, label, t);
+          pushPoint(humChart, label, h);
+          pushPoint(gyroChart, label, Number(rot.toFixed(3)));
+          buf.labels.push(label); buf.g.push(Number(gForce.toFixed(3)));
+          buf.ax.push(a.x); buf.ay.push(a.y); buf.az.push(a.z);
+          if (buf.labels.length > WINDOW) Object.values(buf).forEach(arr => arr.shift());
+          redrawAccel();
+
+          const dev = Math.abs(gForce - 1);
+          recentMotion.push({ dev, rot });
+          if (recentMotion.length > 5) recentMotion.shift();
+          if (dev >= 0.08 || rot >= 0.3) lastMovementAt = Date.now();
+        }
+
+        const act = activityFromRecent();
+        if (act) {
+          $('mv-level').innerHTML = `<span class="${act.cls}"><i class="fa-solid ${act.icon}"></i> ${act.label}</span>`;
+          $('mv-level-note').textContent = act.note;
+          $('stat-activity').innerHTML = `<span class="${act.cls}">${act.label}</span>`;
+        }
+        renderHero();
+      } catch (err) {
+        console.error('Error fetching sensor data:', err);
+        $('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-[#d03b3b]';
+        $('status-text').textContent = 'Server unreachable';
+      }
+    }
+
+    function tickLastMovement() {
+      $('mv-last').textContent = lastMovementAt ? fmtAgo((Date.now() - lastMovementAt) / 1000) : (deviceOnline ? 'None yet' : '--');
+    }
+
+    // ---------- Environment history ----------
+    function fmt(v, d = 1) { return v != null && !isNaN(v) ? Number(v).toFixed(d) : '--'; }
+    function renderHistoryTable(list) {
+      const tbody = $('history-tbody');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center muted">No readings yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(row => `
+        <tr class="border-t hover:bg-[#f7fbf8]" style="border-color: var(--border)">
+          <td class="py-2 px-4 whitespace-nowrap">${escapeHtml(row.timestamp)}</td>
+          <td class="py-2 px-4 text-right">${fmt(row.temperature)}</td>
+          <td class="py-2 px-4 text-right">${fmt(row.humidity)}</td>
+          <td class="py-2 px-4 text-right">${fmt(row.pressure)}</td>
+          <td class="py-2 px-4 text-right">${row.rssi != null ? escapeHtml(row.rssi) : '--'}</td>
+        </tr>`).join('');
+    }
+    async function fetchHistoryData() {
+      try {
+        const res = await fetch('/api/history');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.history) { globalHistory = data.history; renderHistoryTable(data.history); }
+      } catch (e) { console.error('Error fetching history:', e); }
+    }
+    function exportCSV() {
+      if (!globalHistory || globalHistory.length === 0) { alert('There are no readings to export yet.'); return; }
+      let csv = '﻿ID,Timestamp,Temperature (C),Humidity (%RH),Pressure (hPa),RSSI (dBm)\n';
+      globalHistory.forEach(r => { csv += `"${r.id}","${r.timestamp}","${r.temperature}","${r.humidity}","${r.pressure}","${r.rssi}"\n`; });
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+      const link = document.createElement('a');
+      link.href = url; link.download = `environment_readings_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    }
+    async function clearHistory() {
+      if (!confirm('Clear all environment readings from this log?')) return;
+      try {
+        await fetch('/api/history/clear', { method: 'POST' });
+        globalHistory = []; renderHistoryTable([]);
+      } catch (e) { console.error('Clear error:', e); }
+    }
+
+    // ---------- AI incident summary ----------
+    async function generateAISummary() {
+      const apiKey = localStorage.getItem('gemini_api_key') || '';
+      const btn = $('ai-generate-btn'), placeholder = $('ai-placeholder'), content = $('ai-content');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating…';
+      placeholder.classList.remove('hidden');
+      placeholder.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[var(--brand)]"></i> Preparing today\'s incident summary…';
+      content.classList.add('hidden');
+      try {
+        const res = await fetch('/api/ai/daily-summary', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: apiKey || null, language: 'en' })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          placeholder.classList.add('hidden'); content.classList.remove('hidden');
+          content.innerHTML = marked.parse(data.summary);
+        } else {
+          placeholder.innerHTML = `<span class="text-[#a32626]">Could not generate the summary: ${escapeHtml(data.detail || 'the AI service is unavailable')}</span>`;
+        }
+      } catch (e) {
+        placeholder.innerHTML = `<span class="text-[#a32626]">Could not generate the summary: ${escapeHtml(e.message)}</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Generate summary';
+      }
+    }
+    async function loadLatestSummary() {
+      // Earlier summaries may have been written in Thai (e.g. before this dashboard was translated); only show English ones.
+      try {
+        const res = await fetch('/api/ai/daily-summary/latest');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.summary && !/[฀-๿]/.test(data.summary)) {
+          $('ai-placeholder').classList.add('hidden');
+          const content = $('ai-content');
+          content.classList.remove('hidden');
+          content.innerHTML = marked.parse(data.summary);
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    // ---------- Settings ----------
+    async function openConfigModal() {
+      $('gemini-key-input').value = localStorage.getItem('gemini_api_key') || '';
+      $('tg-token-input').value = localStorage.getItem('tg_bot_token') || '';
+      let cid = localStorage.getItem('tg_chat_id') || '';
+      if (!cid) {
+        try {
+          const cfg = await (await fetch('/api/config')).json();
+          if (cfg.telegram_chat_id) { cid = cfg.telegram_chat_id; localStorage.setItem('tg_chat_id', cid); }
+        } catch (e) {}
+      }
+      $('tg-chat-input').value = cid;
+      $('tg-test-result').innerHTML = '';
+      $('config-modal').classList.remove('hidden');
+    }
+    function closeConfigModal() { $('config-modal').classList.add('hidden'); }
+    function saveConfig() {
+      localStorage.setItem('gemini_api_key', $('gemini-key-input').value.trim());
+      localStorage.setItem('tg_bot_token', $('tg-token-input').value.trim());
+      localStorage.setItem('tg_chat_id', $('tg-chat-input').value.trim());
+      closeConfigModal();
+    }
+    async function testTelegramAlert() {
+      const btn = $('test-tg-btn'), out = $('tg-test-result');
+      const token = $('tg-token-input').value.trim(), chatId = $('tg-chat-input').value.trim();
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…';
+      out.textContent = 'Contacting Telegram…';
+      try {
+        const res = await fetch('/api/telegram/test', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token || null, chat_id: chatId || null })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          out.innerHTML = `<span class="text-[var(--brand)] font-semibold"><i class="fa-solid fa-circle-check"></i> Test alert sent (chat ID: ${escapeHtml(data.chat_id)})</span>`;
+          if (data.chat_id) { $('tg-chat-input').value = data.chat_id; localStorage.setItem('tg_chat_id', data.chat_id); }
+        } else if (data.status === 'waiting_chat') {
+          out.innerHTML = '<span class="text-[#7a5200]"><i class="fa-solid fa-triangle-exclamation"></i> No chat ID yet. Open <a href="https://t.me/bercuncu_bot" target="_blank" rel="noopener" class="underline font-semibold">@bercuncu_bot</a> in Telegram, press Start, then try again.</span>';
+        } else {
+          out.innerHTML = `<span class="text-[#a32626]"><i class="fa-solid fa-circle-xmark"></i> Failed: ${escapeHtml(data.message || data.detail || 'could not send')}</span>`;
+        }
+      } catch (e) {
+        out.innerHTML = `<span class="text-[#a32626]">Error: ${escapeHtml(e.message)}</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send test';
+      }
+    }
+
+    // ---------- Telegram Mini App & Care Assistant chat ----------
+    let currentChatId = localStorage.getItem('tg_chat_id') || 'web_user';
+    let isChatHistoryLoaded = false;
+
+    if (window.Telegram && window.Telegram.WebApp && Telegram.WebApp.initData) {
+      try {
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+        const tgUser = Telegram.WebApp.initDataUnsafe?.user;
+        if (tgUser && tgUser.id) { currentChatId = String(tgUser.id); localStorage.setItem('tg_chat_id', currentChatId); }
+        $('tma-badge').classList.remove('hidden');
+      } catch (e) { console.warn('[TMA] init error:', e); }
+    }
+
+    function switchTab(tab) {
+      if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.selectionChanged();
+      const onDash = tab === 'dashboard';
+      $('view-dashboard').classList.toggle('hidden', !onDash);
+      $('view-chat').classList.toggle('hidden', onDash);
+      $('nav-btn-dashboard').className = `flex flex-col items-center gap-1 px-4 py-1 rounded-xl ${onDash ? 'text-[var(--brand)]' : 'text-[#84968d]'}`;
+      $('nav-btn-chat').className = `flex flex-col items-center gap-1 px-4 py-1 rounded-xl ${onDash ? 'text-[#84968d]' : 'text-[var(--brand)]'}`;
+      if (!onDash) {
+        if (!isChatHistoryLoaded) loadChatHistory();
+        scrollChatToBottom();
+        setTimeout(() => $('chat-input')?.focus(), 150);
+      }
+    }
+    function scrollChatToBottom() { const b = $('chat-messages-box'); if (b) b.scrollTop = b.scrollHeight; }
+
+    function appendUserBubble(text) {
+      const div = document.createElement('div');
+      div.className = 'flex items-start justify-end gap-3';
+      div.innerHTML = `
+        <div class="bg-[var(--brand)] text-white rounded-2xl rounded-tr-none p-3.5 max-w-[85%] leading-relaxed">${escapeHtml(text)}</div>
+        <div class="w-8 h-8 rounded-lg bg-[#eef3f0] text-[#4a5f55] flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-user text-xs"></i></div>`;
+      $('chat-messages-box').appendChild(div);
+      scrollChatToBottom();
+    }
+    function appendAssistantBubble(html, id = null) {
+      const div = document.createElement('div');
+      div.className = 'flex items-start gap-3';
+      if (id) div.id = id;
+      div.innerHTML = `
+        <div class="w-8 h-8 rounded-lg bg-[var(--brand-100)] text-[var(--brand)] flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-user-nurse text-xs"></i></div>
+        <div class="bg-white border rounded-2xl rounded-tl-none p-3.5 max-w-[85%] leading-relaxed ink-2 prose-care" style="border-color: var(--border)">${html}</div>`;
+      $('chat-messages-box').appendChild(div);
+      scrollChatToBottom();
+      return div;
+    }
+
+    async function sendChatMessage(overrideText = null) {
+      const input = $('chat-input');
+      const text = (overrideText || (input ? input.value : '')).trim();
+      if (!text) return;
+      if (!overrideText && input) input.value = '';
+      appendUserBubble(text);
+      const tempId = 'typing-' + Date.now();
+      appendAssistantBubble('<span class="muted italic"><i class="fa-solid fa-spinner fa-spin"></i> Thinking…</span>', tempId);
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: currentChatId, message: text, language: 'en' })
+        });
+        const data = await res.json();
+        $(tempId)?.remove();
+        if (data.status === 'success') {
+          appendAssistantBubble(marked.parse(data.reply));
+          if (window.Telegram?.WebApp?.HapticFeedback) Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+        } else {
+          appendAssistantBubble(`<span class="text-[#a32626]">Sorry, something went wrong: ${escapeHtml(data.message || 'the assistant is unavailable')}</span>`);
+        }
+      } catch (e) {
+        $(tempId)?.remove();
+        appendAssistantBubble(`<span class="text-[#a32626]">Could not send the message: ${escapeHtml(e.message)}</span>`);
+      }
+    }
+    function handleChatSubmit(e) { e.preventDefault(); sendChatMessage(); }
+    function sendQuickPrompt(p) { sendChatMessage(p); }
+    async function clearChatMemory() {
+      if (!confirm('Clear this conversation and start a new topic?')) return;
+      await sendChatMessage('/clear');
+    }
+    async function loadChatHistory() {
+      try {
+        const res = await fetch(`/api/chat/history?chat_id=${encodeURIComponent(currentChatId)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        isChatHistoryLoaded = true;
+        if (data.status === 'success' && data.history && data.history.length > 0) {
+          const box = $('chat-messages-box');
+          box.innerHTML = '';
+          data.history.forEach(item => item.role === 'user' ? appendUserBubble(item.text) : appendAssistantBubble(marked.parse(item.text)));
+          scrollChatToBottom();
+        }
+      } catch (e) { console.warn('Failed to load chat history:', e); }
+    }
+
+    // ---------- Polling ----------
+    setInterval(fetchSensorData, 1000);
+    setInterval(fetchHistoryData, 3000);
+    setInterval(fetchFallEvents, 2000);
+    setInterval(checkEmergency, 500);
+    setInterval(tickLastMovement, 1000);
+
+    fetchSensorData();
+    fetchHistoryData();
+    fetchFallEvents();
+    checkEmergency();
+    loadLatestSummary();
+    renderHero();
+  </script>
+</body>
+</html>
