@@ -192,12 +192,12 @@
           <div class="card p-4">
             <div class="text-xs font-semibold ink-2">Activity level</div>
             <div id="mv-level" class="text-xl font-bold mt-1">--</div>
-            <div id="mv-level-note" class="text-xs muted mt-1">Based on the last 5 seconds</div>
+            <div id="mv-level-note" class="text-xs muted mt-1">Based on the last 5 readings</div>
           </div>
           <div class="card p-4">
             <div class="text-xs font-semibold ink-2">Body acceleration</div>
             <div class="mt-1"><span id="mv-g" class="text-2xl font-bold tnum">--</span> <span class="text-sm muted">g</span></div>
-            <div class="text-xs muted mt-1">1.0 g ≈ standing or sitting still</div>
+            <div id="mv-g-note" class="text-xs muted mt-1">1.0 g ≈ standing or sitting still</div>
           </div>
           <div class="card p-4">
             <div class="text-xs font-semibold ink-2">Rotation rate</div>
@@ -216,7 +216,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
               <div>
                 <h3 class="font-semibold">Body acceleration</h3>
-                <p id="accel-caption" class="text-xs muted">Total acceleration in g, with fall-detection thresholds</p>
+                <p id="accel-caption" class="text-xs muted">Average g per reading; shaded band = lowest to peak, with fall-detection thresholds</p>
               </div>
               <div class="seg" role="tablist" aria-label="Acceleration view">
                 <button id="seg-overall" class="active" onclick="setAccelView('overall')">Overall</button>
@@ -228,7 +228,7 @@
           <div class="card p-5">
             <div class="mb-3">
               <h3 class="font-semibold">Rotation rate</h3>
-              <p class="text-xs muted">Overall turning speed of the body, rad/s</p>
+              <p class="text-xs muted">Fastest turning speed of the body in each reading, rad/s</p>
             </div>
             <div class="h-64"><canvas id="gyroChart" aria-label="Rotation rate chart" role="img"></canvas></div>
           </div>
@@ -614,19 +614,30 @@
       { value: 1.0, label: 'At rest 1.0 g', color: css('--muted') },
       { value: 0.7, label: 'Free-fall 0.7 g', color: '#c98500', textColor: '#7a5200' }
     ]};
+    // Overall view: average g as the line, plus a shaded band from the lowest to the highest
+    // of all 50 Hz samples in that reading, so short spikes between readings are still visible.
+    function overallAccelDatasets() {
+      const c = css('--series-motion');
+      const edge = (label) => ({ label, data: [], borderColor: 'transparent', backgroundColor: c + '29', pointRadius: 0, pointHoverRadius: 3, pointBackgroundColor: c, borderWidth: 0 });
+      return [
+        { ...lineDataset('Average', c), order: 0 },
+        { ...edge('Peak'), fill: '+1', order: 1 },
+        { ...edge('Lowest'), fill: false, order: 2 }
+      ];
+    }
     const accelChart = new Chart($('accelChart'), {
       type: 'line',
-      data: { labels: [], datasets: [lineDataset('Acceleration', css('--series-motion'), true)] },
+      data: { labels: [], datasets: overallAccelDatasets() },
       options: baseOptions('g', { y: { suggestedMin: 0, suggestedMax: 2.5 }, refLines: accelRefLines })
     });
     const gyroChart = new Chart($('gyroChart'), {
       type: 'line',
-      data: { labels: [], datasets: [lineDataset('Rotation', css('--series-rot'), true)] },
+      data: { labels: [], datasets: [lineDataset('Peak rotation', css('--series-rot'), true)] },
       options: baseOptions('rad/s', { y: { suggestedMin: 0, suggestedMax: 2 } })
     });
 
     // Rolling buffers so the acceleration chart can switch views without losing history
-    const buf = { labels: [], g: [], ax: [], ay: [], az: [] };
+    const buf = { labels: [], g: [], gmin: [], gmax: [], ax: [], ay: [], az: [] };
     let accelView = 'overall';
 
     function setAccelView(view) {
@@ -634,12 +645,12 @@
       $('seg-overall').classList.toggle('active', view === 'overall');
       $('seg-axes').classList.toggle('active', view === 'axes');
       if (view === 'overall') {
-        accelChart.data.datasets = [lineDataset('Acceleration', css('--series-motion'), true)];
+        accelChart.data.datasets = overallAccelDatasets();
         accelChart.options.plugins.refLines = accelRefLines;
         accelChart.options.plugins.legend.display = false;
         accelChart.options.scales.y.suggestedMin = 0; accelChart.options.scales.y.suggestedMax = 2.5;
         accelChart.options.plugins.tooltip.callbacks.label = (c) => ` ${c.dataset.label}: ${c.parsed.y.toFixed(2)} g`;
-        $('accel-caption').textContent = 'Total acceleration in g, with fall-detection thresholds';
+        $('accel-caption').textContent = 'Average g per reading; shaded band = lowest to peak, with fall-detection thresholds';
       } else {
         accelChart.data.datasets = [
           lineDataset('X axis', '#2a78d6'), lineDataset('Y axis', '#eb6834'), lineDataset('Z axis', '#1baf7a')
@@ -659,6 +670,8 @@
       accelChart.data.labels = buf.labels.slice();
       if (accelView === 'overall') {
         accelChart.data.datasets[0].data = buf.g.slice();
+        accelChart.data.datasets[1].data = buf.gmax.slice();
+        accelChart.data.datasets[2].data = buf.gmin.slice();
       } else {
         accelChart.data.datasets[0].data = buf.ax.slice();
         accelChart.data.datasets[1].data = buf.ay.slice();
@@ -831,8 +844,8 @@
       if (recentMotion.length === 0) return null;
       const avgDev = recentMotion.reduce((a, m) => a + m.dev, 0) / recentMotion.length;
       const avgRot = recentMotion.reduce((a, m) => a + m.rot, 0) / recentMotion.length;
-      if (avgDev < 0.08 && avgRot < 0.3) return { label: 'Resting', icon: 'fa-couch', cls: 'text-[#4a5f55]', note: 'Little or no movement' };
-      if (avgDev < 0.35 && avgRot < 1.5) return { label: 'Light activity', icon: 'fa-person-walking', cls: 'text-[var(--brand)]', note: 'e.g. walking, small movements' };
+      if (avgDev < 0.1 && avgRot < 0.3) return { label: 'Resting', icon: 'fa-couch', cls: 'text-[#4a5f55]', note: 'Little or no movement' };
+      if (avgDev < 0.5 && avgRot < 1.5) return { label: 'Light activity', icon: 'fa-person-walking', cls: 'text-[var(--brand)]', note: 'e.g. walking, small movements' };
       return { label: 'Active', icon: 'fa-person-running', cls: 'text-[var(--brand)]', note: 'Strong or fast movement' };
     }
 
@@ -880,28 +893,35 @@
         // Movement
         const a = data.accel || { x: 0, y: 0, z: 0 };
         const gy = data.gyro || { x: 0, y: 0, z: 0 };
-        const gForce = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z) / G;
-        const rot = Math.sqrt(gy.x * gy.x + gy.y * gy.y + gy.z * gy.z);
-        $('mv-g').textContent = gForce.toFixed(2);
-        $('mv-rot').textContent = rot.toFixed(2);
+        const instG = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z) / G;
+        const instRot = Math.sqrt(gy.x * gy.x + gy.y * gy.y + gy.z * gy.z);
+        // Newer firmware sends a summary of every 50 Hz sample since the previous reading;
+        // older firmware only sends one instantaneous sample, so fall back to that.
+        const m = data.motion && data.motion.samples > 0 ? data.motion : null;
+        const gAvg = m ? m.g_avg : instG, gMin = m ? m.g_min : instG, gMax = m ? m.g_max : instG;
+        const rotPeak = m ? m.rot_max : instRot, rotAvg = m ? m.rot_avg : instRot;
+        $('mv-g').textContent = gAvg.toFixed(2);
+        $('mv-g-note').textContent = m ? `Peak ${gMax.toFixed(2)} g in the last reading` : '1.0 g ≈ standing or sitting still';
+        $('mv-rot').textContent = rotPeak.toFixed(2);
 
-        // Only append to charts when the device has produced a new sample
-        const sampleKey = data.last_updated + '|' + a.x + '|' + a.y + '|' + a.z + '|' + t + '|' + h;
+        // Only append to charts when the device has posted a new sample (seq increments per post)
+        const sampleKey = data.seq != null ? String(data.seq) : data.last_updated + '|' + a.x + '|' + a.y + '|' + a.z;
         if (sampleKey !== lastSampleKey) {
           lastSampleKey = sampleKey;
           const label = fmtTime(new Date());
           pushPoint(tempChart, label, t);
           pushPoint(humChart, label, h);
-          pushPoint(gyroChart, label, Number(rot.toFixed(3)));
-          buf.labels.push(label); buf.g.push(Number(gForce.toFixed(3)));
+          pushPoint(gyroChart, label, Number(rotPeak.toFixed(3)));
+          buf.labels.push(label);
+          buf.g.push(Number(gAvg.toFixed(3))); buf.gmin.push(Number(gMin.toFixed(3))); buf.gmax.push(Number(gMax.toFixed(3)));
           buf.ax.push(a.x); buf.ay.push(a.y); buf.az.push(a.z);
           if (buf.labels.length > WINDOW) Object.values(buf).forEach(arr => arr.shift());
           redrawAccel();
 
-          const dev = Math.abs(gForce - 1);
-          recentMotion.push({ dev, rot });
+          const dev = Math.max(Math.abs(gMax - 1), Math.abs(1 - gMin));
+          recentMotion.push({ dev, rot: rotAvg });
           if (recentMotion.length > 5) recentMotion.shift();
-          if (dev >= 0.08 || rot >= 0.3) lastMovementAt = Date.now();
+          if (dev >= 0.1 || rotAvg >= 0.3) lastMovementAt = Date.now();
         }
 
         const act = activityFromRecent();
@@ -1155,7 +1175,7 @@
     }
 
     // ---------- Polling ----------
-    setInterval(fetchSensorData, 1000);
+    setInterval(fetchSensorData, 500); // board posts ~1/s; poll twice as often to keep display lag ≤ 0.5 s
     setInterval(fetchHistoryData, 3000);
     setInterval(fetchFallEvents, 2000);
     setInterval(checkEmergency, 500);

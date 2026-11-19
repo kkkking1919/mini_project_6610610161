@@ -71,7 +71,28 @@ sensors_event_t current_a, current_g, current_temp_mpu;
 
 // ตัวจับเวลาสำหรับ Routine Telemetry
 unsigned long lastTelemetryTime = 0;
-const unsigned long TELEMETRY_INTERVAL = 4000; // ส่ง Telemetry ทั่วไปทุก 4 วินาที
+const unsigned long TELEMETRY_INTERVAL = 1000; // ส่ง Telemetry ทุก 1 วินาที (near real-time)
+
+// --- MOTION SUMMARY: สรุปการเคลื่อนไหวทุก sample (50Hz) ระหว่างรอบส่ง Telemetry ---
+// Task ตรวจจับการล้มเขียน, loop() อ่านแล้วรีเซ็ต -> ป้องกันด้วย critical section
+portMUX_TYPE motionMux = portMUX_INITIALIZER_UNLOCKED;
+float motion_g_min = 99.0, motion_g_max = 0.0, motion_g_sum = 0.0;
+float motion_rot_max = 0.0, motion_rot_sum = 0.0;
+uint32_t motion_samples = 0;
+
+// --- NETWORK: เส้นทางส่งข้อมูล LAN / Cloudflare Tunnel ---
+// ใช้ client แบบ global + HTTP keep-alive เพื่อไม่ต้องเปิด TCP/TLS ใหม่ทุกครั้ง
+// (TLS handshake บน ESP32-S2 ใช้เวลา ~1-2 วินาทีต่อครั้ง)
+WiFiClient lanClient;
+WiFiClientSecure tunnelClient;
+HTTPClient lanHttp;
+HTTPClient tunnelHttp;
+
+// จำว่า LAN ใช้ไม่ได้ แล้วข้ามไปใช้ Tunnel ตรงๆ จนถึงเวลาลองใหม่ (ไม่เสียเวลารอ LAN timeout ทุกรอบ)
+const unsigned long LAN_RETRY_INTERVAL = 60000; // ลอง LAN ใหม่ทุก 60 วินาที
+const uint16_t LAN_CONNECT_TIMEOUT_MS = 800;
+unsigned long lanRetryAt = 0;        // 0 = ลอง LAN ได้ทันที
+bool lanAvailable = true;
 
 // ฟังก์ชันแปลงระดับความแรงสัญญาณ RSSI
 String getSignalQuality(int rssi) {
@@ -82,31 +103,62 @@ String getSignalQuality(int rssi) {
   return "Very Weak (อ่อนมาก)";
 }
 
-// ฟังก์ชันสากลสำหรับส่ง HTTP POST ไปยังเซิร์ฟเวอร์ (รองรับทั้ง HTTP บน LAN และ HTTPS บน Cloudflare)
-bool sendJsonPost(const char* url, const String& payload, int timeoutMs) {
+// ส่ง HTTP POST ผ่าน HTTPClient/Client ที่ถือไว้ตลอด (keep-alive: ใช้ connection เดิมซ้ำถ้ายังเปิดอยู่)
+bool postJson(HTTPClient& http, WiFiClient& client, const char* url, const String& payload,
+              uint16_t connectTimeoutMs, uint16_t timeoutMs) {
   if (url == NULL || strlen(url) == 0) return false;
-  HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient standardClient;
+  unsigned long t0 = millis();
 
-  if (strncmp(url, "https://", 8) == 0) {
-    secureClient.setInsecure();
-    http.begin(secureClient, url);
-  } else {
-    http.begin(standardClient, url);
+  http.setReuse(true);
+  if (!http.begin(client, url)) {
+    Serial.printf("[HTTP] begin() failed: %s\n", url);
+    return false;
   }
+  http.setConnectTimeout(connectTimeoutMs);
   http.setTimeout(timeoutMs);
   http.addHeader("Content-Type", "application/json");
 
   int code = http.POST(payload);
   bool success = (code > 0 && code < 400);
   if (success) {
-    Serial.printf("[HTTP %d OK] Successfully reached: %s\n", code, url);
+    Serial.printf("[HTTP %d OK] %lums %s\n", code, millis() - t0, url);
+    http.end();            // with reuse=true the TCP/TLS connection stays open
   } else {
-    Serial.printf("[HTTP Failed] %s -> %s (Code: %d)\n", url, http.errorToString(code).c_str(), code);
+    Serial.printf("[HTTP Failed] %s -> %s (Code: %d, %lums)\n", url, http.errorToString(code).c_str(), code, millis() - t0);
+    http.end();
+    client.stop();         // drop a possibly stale keep-alive connection; next call reconnects
   }
-  http.end();
   return success;
+}
+
+bool postLan(const char* url, const String& payload) {
+  return postJson(lanHttp, lanClient, url, payload, LAN_CONNECT_TIMEOUT_MS, 1500);
+}
+
+bool postTunnel(const char* url, const String& payload) {
+  return postJson(tunnelHttp, tunnelClient, url, payload, 5000, 6000);
+}
+
+// ส่งแบบ Dual-Route ที่จำเส้นทาง: ถ้า LAN เพิ่งล้มเหลว ให้ไป Tunnel ตรงๆ จนกว่าจะถึงเวลาลอง LAN ใหม่
+// alwaysTryBoth = true (ใช้กับ Fall Alert): ถ้าเส้นทางแรกล้มเหลว จะลองอีกเส้นทางเสมอ
+bool sendDualRoute(const char* lanUrl, const char* tunnelUrl, const String& payload, bool alwaysTryBoth) {
+  unsigned long now = millis();
+  bool tryLanFirst = lanAvailable || (long)(now - lanRetryAt) >= 0;
+
+  if (tryLanFirst) {
+    if (postLan(lanUrl, payload)) {
+      if (!lanAvailable) Serial.println("[ROUTE] LAN is reachable again -> using direct LAN route");
+      lanAvailable = true;
+      return true;
+    }
+    lanAvailable = false;
+    lanRetryAt = millis() + LAN_RETRY_INTERVAL;
+    Serial.printf("[ROUTE] LAN unreachable -> using Cloudflare Tunnel for the next %lus\n", LAN_RETRY_INTERVAL / 1000);
+    return strlen(tunnelUrl) > 0 && postTunnel(tunnelUrl, payload);
+  }
+
+  if (strlen(tunnelUrl) > 0 && postTunnel(tunnelUrl, payload)) return true;
+  return alwaysTryBoth && postLan(lanUrl, payload);
 }
 
 // ฟังก์ชันส่งสัญญาณเตือนภัยฉุกเฉิน (Fall Event + Context) ไปยังเซิร์ฟเวอร์ (LAN -> Cloudflare Fallback)
@@ -147,11 +199,9 @@ void dispatchFallAlert(float peak_g) {
   String payload;
   serializeJson(doc, payload);
 
-  // ส่งด้วยระบบ Dual-Route: ลอง LAN ก่อน หากขัดข้องจะสลับไป Cloudflare Tunnel ทันที
-  bool sent = sendJsonPost(serverUrl_lan_fall, payload, 1500);
-  if (!sent && strlen(serverUrl_tunnel_fall) > 0) {
-    Serial.println("[ALERT FALLBACK] Switching to Cloudflare Tunnel for Fall Alert...");
-    sendJsonPost(serverUrl_tunnel_fall, payload, 6000);
+  // ส่งด้วยระบบ Dual-Route (ใช้เส้นทางที่ใช้งานได้ล่าสุดก่อน และลองอีกเส้นทางเสมอหากล้มเหลว)
+  if (!sendDualRoute(serverUrl_lan_fall, serverUrl_tunnel_fall, payload, true)) {
+    Serial.println("[ALERT] ❌ Fall alert could not be delivered on either route!");
   }
 }
 
@@ -175,17 +225,21 @@ void sendRoutineTelemetry() {
 
   int current_rssi = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -100;
 
-  Serial.println("\n----------------------------------------");
-  Serial.println("           Sensor Readings Log          ");
-  Serial.println("----------------------------------------");
-  Serial.printf("[1] HTS221  : Temp = %.2f °C, Hum = %.2f %%RH\n", current_temp, current_hum);
-  Serial.printf("[2] BMP280  : Pres = %.2f hPa\n", current_press);
-  if (mpu_found) {
-    Serial.printf("[3] MPU6050 : Accel = (%.2f, %.2f, %.2f) m/s² | Gyro = (%.3f, %.3f, %.3f) rad/s\n",
-                  current_a.acceleration.x, current_a.acceleration.y, current_a.acceleration.z,
-                  current_g.gyro.x, current_g.gyro.y, current_g.gyro.z);
-  }
-  Serial.printf("[4] WiFi    : RSSI = %d dBm [%s]\n", current_rssi, getSignalQuality(current_rssi).c_str());
+  // อ่านสรุปการเคลื่อนไหวของทุก sample (50Hz) ตั้งแต่ส่งครั้งก่อน แล้วรีเซ็ตสำหรับรอบถัดไป
+  float g_min, g_max, g_sum, rot_max, rot_sum;
+  uint32_t samples;
+  portENTER_CRITICAL(&motionMux);
+  g_min = motion_g_min; g_max = motion_g_max; g_sum = motion_g_sum;
+  rot_max = motion_rot_max; rot_sum = motion_rot_sum; samples = motion_samples;
+  motion_g_min = 99.0; motion_g_max = 0.0; motion_g_sum = 0.0;
+  motion_rot_max = 0.0; motion_rot_sum = 0.0; motion_samples = 0;
+  portEXIT_CRITICAL(&motionMux);
+
+  // Log แบบบรรทัดเดียว (ส่งทุก 1 วินาที จึงไม่พิมพ์ยาวเกินไป)
+  Serial.printf("[Telemetry] T=%.2f°C H=%.2f%% P=%.2fhPa RSSI=%d | g avg=%.2f min=%.2f max=%.2f rot max=%.2f (n=%u) | route=%s\n",
+                current_temp, current_hum, current_press, current_rssi,
+                samples ? g_sum / samples : 0.0f, samples ? g_min : 0.0f, g_max,
+                rot_max, samples, lanAvailable ? "LAN" : "TUNNEL");
 
   JsonDocument doc;
   if (hts_found) {
@@ -205,19 +259,24 @@ void sendRoutineTelemetry() {
     gyro["x"] = current_g.gyro.x;
     gyro["y"] = current_g.gyro.y;
     gyro["z"] = current_g.gyro.z;
+
+    if (samples > 0) {
+      JsonObject motion = doc["motion"].to<JsonObject>();
+      motion["g_avg"] = g_sum / samples;
+      motion["g_min"] = g_min;
+      motion["g_max"] = g_max;
+      motion["rot_avg"] = rot_sum / samples;
+      motion["rot_max"] = rot_max;
+      motion["samples"] = samples;
+    }
   }
   doc["rssi"] = current_rssi;
 
   String payload;
   serializeJson(doc, payload);
 
-  // ส่งข้อมูลด้วยระบบ Dual-Route: ลอง LAN ก่อน หากขัดข้องจะสลับไป Cloudflare Tunnel อัตโนมัติ
-  bool sent = sendJsonPost(serverUrl_lan_telemetry, payload, 1500);
-  if (!sent && strlen(serverUrl_tunnel_telemetry) > 0) {
-    Serial.println("[ROUTINE FALLBACK] Routing via Cloudflare Public Tunnel...");
-    sendJsonPost(serverUrl_tunnel_telemetry, payload, 6000);
-  }
-  Serial.println("----------------------------------------");
+  // ส่งข้อมูลด้วยระบบ Dual-Route ที่จำเส้นทาง (LAN ตรง หรือ Cloudflare Tunnel)
+  sendDualRoute(serverUrl_lan_telemetry, serverUrl_tunnel_telemetry, payload, false);
 }
 
 // --- FREERTOS TASK: HIGH-PRIORITY 50Hz FALL DETECTION (RUNS CONTINUOUSLY) ---
@@ -249,6 +308,17 @@ void fallDetectionTask(void* pvParameters) {
     float gy = a.acceleration.y / 9.80665;
     float gz = a.acceleration.z / 9.80665;
     float svm = sqrt(gx * gx + gy * gy + gz * gz); // Signal Vector Magnitude
+    float rot = sqrt(g.gyro.x * g.gyro.x + g.gyro.y * g.gyro.y + g.gyro.z * g.gyro.z);
+
+    // สะสมสรุปการเคลื่อนไหวสำหรับรอบส่ง Telemetry ถัดไป (เพื่อไม่ให้พลาดการเคลื่อนไหวระหว่างรอบ)
+    portENTER_CRITICAL(&motionMux);
+    if (svm < motion_g_min) motion_g_min = svm;
+    if (svm > motion_g_max) motion_g_max = svm;
+    motion_g_sum += svm;
+    if (rot > motion_rot_max) motion_rot_max = rot;
+    motion_rot_sum += rot;
+    motion_samples++;
+    portEXIT_CRITICAL(&motionMux);
 
     unsigned long now = millis();
 
@@ -375,6 +445,9 @@ void setup() {
     }
   }
 
+  // Cloudflare Tunnel ใช้ HTTPS: ข้ามการตรวจ certificate (เหมือนเดิม) และถือ connection ไว้ใช้ซ้ำ
+  tunnelClient.setInsecure();
+
   // 5. สร้าง FreeRTOS High-Priority Fall Detection Task (50Hz / Core 0)
   xTaskCreatePinnedToCore(
     fallDetectionTask,
@@ -401,7 +474,7 @@ void loop() {
     lastTelemetryTime = millis(); // รีเซ็ตตัวจับเวลา Telemetry เพื่อหลีกเลี่ยงการส่งชนกัน
   }
 
-  // PRIORITY 2: ส่งข้อมูล Telemetry ประจำรอบ (ทุก 3 วินาที)
+  // PRIORITY 2: ส่งข้อมูล Telemetry ประจำรอบ (ทุก 1 วินาที)
   if (now - lastTelemetryTime >= TELEMETRY_INTERVAL) {
     lastTelemetryTime = now;
     sendRoutineTelemetry();

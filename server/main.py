@@ -89,6 +89,8 @@ latest_data = {
     "rssi": -100,
     "accel": {"x": 0.0, "y": 0.0, "z": 0.0},
     "gyro": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "motion": None,      # summary of all 50 Hz samples since the previous telemetry post
+    "seq": 0,            # increments on every telemetry post so clients can detect new samples
     "last_updated": None,
     "is_connected": False
 }
@@ -248,6 +250,15 @@ class GyroData(BaseModel):
     y: float = 0.0
     z: float = 0.0
 
+class MotionSummary(BaseModel):
+    """Min/avg/max of every 50 Hz motion sample the board took since its previous post."""
+    g_avg: float = 0.0
+    g_min: float = 0.0
+    g_max: float = 0.0
+    rot_avg: float = 0.0
+    rot_max: float = 0.0
+    samples: int = 0
+
 class SensorPayload(BaseModel):
     temperature: Optional[float] = None
     humidity: Optional[float] = None
@@ -255,6 +266,7 @@ class SensorPayload(BaseModel):
     rssi: Optional[int] = None
     accel: Optional[AccelData] = None
     gyro: Optional[GyroData] = None
+    motion: Optional[MotionSummary] = None
 
 class FallEventPayload(BaseModel):
     max_g: float
@@ -426,7 +438,20 @@ async def receive_sensor_data(payload: SensorPayload, db: Session = Depends(get_
             "y": round(payload.gyro.y, 3),
             "z": round(payload.gyro.z, 3),
         }
-    
+    if payload.motion is not None:
+        m = payload.motion
+        latest_data["motion"] = {
+            "g_avg": round(m.g_avg, 3),
+            "g_min": round(m.g_min, 3),
+            "g_max": round(m.g_max, 3),
+            "rot_avg": round(m.rot_avg, 3),
+            "rot_max": round(m.rot_max, 3),
+            "samples": m.samples,
+        }
+    else:
+        latest_data["motion"] = None
+    latest_data["seq"] += 1
+
     timestamp = get_bangkok_now_str()
     latest_data["last_updated"] = timestamp
     latest_data["is_connected"] = True
