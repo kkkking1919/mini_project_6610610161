@@ -17,9 +17,14 @@
 const char* ssid = "Double19";
 const char* password = "19191919";
 
-// FastAPI Server Endpoints (Direct LAN Hotspot IP for Demo Day: Zero-Latency & No Internet dependency)
-const char* serverUrl_telemetry = "http://10.4.13.128:8080/api/sensor-data";
-const char* serverUrl_fall      = "http://10.4.13.128:8080/api/fall-event";
+// FastAPI Server Endpoints:
+// 1. Direct LAN IP (Ultra-low latency, works offline without internet when port 8080 is accessible)
+const char* serverUrl_lan_telemetry    = "http://172.20.10.5:8080/api/sensor-data";
+const char* serverUrl_lan_fall         = "http://172.20.10.5:8080/api/fall-event";
+
+// 2. Cloudflare Public Tunnel (Auto-fallback: bypasses Windows Firewall / NAT and works across any network)
+const char* serverUrl_tunnel_telemetry = "https://wiring-oxford-chips-november.trycloudflare.com/api/sensor-data";
+const char* serverUrl_tunnel_fall      = "https://wiring-oxford-chips-november.trycloudflare.com/api/fall-event";
 
 // เซนเซอร์ออนบอร์ด
 Adafruit_HTS221 hts;
@@ -77,7 +82,34 @@ String getSignalQuality(int rssi) {
   return "Very Weak (อ่อนมาก)";
 }
 
-// ฟังก์ชันส่งสัญญาณเตือนภัยฉุกเฉิน (Fall Event + Context) ไปยัง Cloudflare Tunnel
+// ฟังก์ชันสากลสำหรับส่ง HTTP POST ไปยังเซิร์ฟเวอร์ (รองรับทั้ง HTTP บน LAN และ HTTPS บน Cloudflare)
+bool sendJsonPost(const char* url, const String& payload, int timeoutMs) {
+  if (url == NULL || strlen(url) == 0) return false;
+  HTTPClient http;
+  WiFiClientSecure secureClient;
+  WiFiClient standardClient;
+
+  if (strncmp(url, "https://", 8) == 0) {
+    secureClient.setInsecure();
+    http.begin(secureClient, url);
+  } else {
+    http.begin(standardClient, url);
+  }
+  http.setTimeout(timeoutMs);
+  http.addHeader("Content-Type", "application/json");
+
+  int code = http.POST(payload);
+  bool success = (code > 0 && code < 400);
+  if (success) {
+    Serial.printf("[HTTP %d OK] Successfully reached: %s\n", code, url);
+  } else {
+    Serial.printf("[HTTP Failed] %s -> %s (Code: %d)\n", url, http.errorToString(code).c_str(), code);
+  }
+  http.end();
+  return success;
+}
+
+// ฟังก์ชันส่งสัญญาณเตือนภัยฉุกเฉิน (Fall Event + Context) ไปยังเซิร์ฟเวอร์ (LAN -> Cloudflare Fallback)
 void dispatchFallAlert(float peak_g) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[-] WiFi not connected, cannot dispatch fall alert.");
@@ -106,19 +138,6 @@ void dispatchFallAlert(float peak_g) {
   Serial.printf("   - Context Pressure   : %.2f hPa\n", current_press);
   Serial.println("*******************************************************\n");
 
-  HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient standardClient;
-
-  if (strncmp(serverUrl_fall, "https://", 8) == 0) {
-    secureClient.setInsecure();
-    http.begin(secureClient, serverUrl_fall);
-  } else {
-    http.begin(standardClient, serverUrl_fall);
-  }
-  http.setTimeout(2500);
-  http.addHeader("Content-Type", "application/json");
-
   JsonDocument doc;
   doc["max_g"] = peak_g;
   doc["temperature"] = current_temp;
@@ -128,13 +147,12 @@ void dispatchFallAlert(float peak_g) {
   String payload;
   serializeJson(doc, payload);
 
-  int code = http.POST(payload);
-  if (code > 0) {
-    Serial.printf("[ALERT DISPATCH] Fall event successfully recorded: HTTP %d\n", code);
-  } else {
-    Serial.printf("[ALERT DISPATCH] Error sending fall event: %s\n", http.errorToString(code).c_str());
+  // ส่งด้วยระบบ Dual-Route: ลอง LAN ก่อน หากขัดข้องจะสลับไป Cloudflare Tunnel ทันที
+  bool sent = sendJsonPost(serverUrl_lan_fall, payload, 1500);
+  if (!sent && strlen(serverUrl_tunnel_fall) > 0) {
+    Serial.println("[ALERT FALLBACK] Switching to Cloudflare Tunnel for Fall Alert...");
+    sendJsonPost(serverUrl_tunnel_fall, payload, 6000);
   }
-  http.end();
 }
 
 // ฟังก์ชันส่งข้อมูลสภาพแวดล้อมประจำรอบ (Routine Telemetry)
@@ -169,19 +187,6 @@ void sendRoutineTelemetry() {
   }
   Serial.printf("[4] WiFi    : RSSI = %d dBm [%s]\n", current_rssi, getSignalQuality(current_rssi).c_str());
 
-  HTTPClient http;
-  WiFiClientSecure secureClient;
-  WiFiClient standardClient;
-
-  if (strncmp(serverUrl_telemetry, "https://", 8) == 0) {
-    secureClient.setInsecure();
-    http.begin(secureClient, serverUrl_telemetry);
-  } else {
-    http.begin(standardClient, serverUrl_telemetry);
-  }
-  http.setTimeout(2500); // Timeout 6 วินาที สำหรับ HTTPS Handshake บน Cloudflare
-  http.addHeader("Content-Type", "application/json");
-
   JsonDocument doc;
   if (hts_found) {
     doc["temperature"] = current_temp;
@@ -206,13 +211,12 @@ void sendRoutineTelemetry() {
   String payload;
   serializeJson(doc, payload);
 
-  int httpCode = http.POST(payload);
-  if (httpCode > 0) {
-    Serial.printf("[HTTP Telemetry] Dashboard Updated: %d OK\n", httpCode);
-  } else {
-    Serial.printf("[HTTP Telemetry] Failed: %s\n", http.errorToString(httpCode).c_str());
+  // ส่งข้อมูลด้วยระบบ Dual-Route: ลอง LAN ก่อน หากขัดข้องจะสลับไป Cloudflare Tunnel อัตโนมัติ
+  bool sent = sendJsonPost(serverUrl_lan_telemetry, payload, 1500);
+  if (!sent && strlen(serverUrl_tunnel_telemetry) > 0) {
+    Serial.println("[ROUTINE FALLBACK] Routing via Cloudflare Public Tunnel...");
+    sendJsonPost(serverUrl_tunnel_telemetry, payload, 6000);
   }
-  http.end();
   Serial.println("----------------------------------------");
 }
 

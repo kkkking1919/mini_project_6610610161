@@ -14,11 +14,10 @@ Write-Host "[*] Searching for active Cloudflare Tunnel URL..." -ForegroundColor 
 
 for ($i = 1; $i -le $maxRetries; $i++) {
     Start-Sleep -Seconds 2
-    $logs = docker logs miniproject_tunnel 2>&1
+    $logs = docker logs miniproject_tunnel --tail 50 2>&1
     foreach ($line in $logs) {
         if ($line -match "https://[a-zA-Z0-9-]+\.trycloudflare\.com") {
             $foundUrl = $matches[0]
-            break
         }
     }
     if ($foundUrl) {
