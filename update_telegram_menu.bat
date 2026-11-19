@@ -13,7 +13,7 @@ powershell -NoProfile -Command ^
   "$url = $envMap['TUNNEL_URL'];" ^
   "if (-not $botToken -or -not $url) { Write-Host '[ERROR] Please specify TELEGRAM_BOT_TOKEN and TUNNEL_URL in server\.env' -ForegroundColor Red; exit 1 };" ^
   "Write-Host ('Target URL: ' + $url) -ForegroundColor Cyan;" ^
-  "$body = @{ menu_button = @{ type = 'web_app'; text = '📱 เปิดแอปสุขภาพ'; web_app = @{ url = $url } } } | ConvertTo-Json -Depth 4;" ^
+  "$body = @{ menu_button = @{ type = 'web_app'; text = '📱 Open Dashboard'; web_app = @{ url = $url } } } | ConvertTo-Json -Depth 4;" ^
   "try {" ^
   "  $res = Invoke-RestMethod -Uri ('https://api.telegram.org/bot' + $botToken + '/setChatMenuButton') -Method Post -Body $body -ContentType 'application/json';" ^
   "  if ($res.ok) {" ^
@@ -25,7 +25,7 @@ powershell -NoProfile -Command ^
   "  Write-Host ('[ERROR] Failed to contact Telegram API: ' + $_) -ForegroundColor Red;" ^
   "};" ^
   "if ($chatId) {" ^
-  "  $msgBody = @{ chat_id = $chatId; text = '📱 *อัปเดตปุ่มเปิด Mini App เรียบร้อยแล้ว!*\nแตะปุ่มด้านล่างเพื่อเปิดแดชบอร์ดได้ทันทีครับ'; parse_mode = 'Markdown'; reply_markup = @{ inline_keyboard = @( @( @{ text = '🚀 เปิด Cucumber RS Mini App'; web_app = @{ url = $url } } ) ) } } | ConvertTo-Json -Depth 5;" ^
+  "  $msgBody = @{ chat_id = $chatId; text = '📱 *Dashboard button updated!*\nTap the button below to open the caregiver dashboard.'; parse_mode = 'Markdown'; reply_markup = @{ inline_keyboard = @( @( @{ text = '🚀 Open Caregiver Dashboard'; web_app = @{ url = $url } } ) ) } } | ConvertTo-Json -Depth 5;" ^
   "  try {" ^
   "    $msgRes = Invoke-RestMethod -Uri ('https://api.telegram.org/bot' + $botToken + '/sendMessage') -Method Post -Body $msgBody -ContentType 'application/json';" ^
   "    Write-Host '[SUCCESS] Sent test launch button directly to your chat!' -ForegroundColor Green;" ^

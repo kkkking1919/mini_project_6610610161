@@ -4,6 +4,31 @@ import json
 from typing import Dict, List, Optional, Callable
 from datetime import datetime
 
+# Name the assistant uses everywhere (Telegram bot and the web dashboard chat).
+ASSISTANT_NAME = "Care Assistant"
+MINI_APP_BUTTON_TEXT = "📱 Open Dashboard"
+
+
+def translate_risk(risk: Optional[str]) -> str:
+    """Return an English risk description.
+
+    Fall events recorded before the switch to English were stored with Thai risk text;
+    map those to the English wording so old incidents read correctly too.
+    """
+    r = str(risk or "")
+    if not r:
+        return "Fall detected"
+    if "ความชื้น" in r:
+        return "🚨 Very high risk: unusually high humidity (possible slip on a wet or bathroom floor)"
+    if "อุณหภูมิ" in r:
+        return "🚨 High risk: unusually high temperature (possible heat stroke or fainting)"
+    if "3.5" in r and "แรงกระแทก" in r:
+        return "⚠️ High risk: severe impact (> 3.5 G) - check for head injury or fractures"
+    if "ปานกลาง" in r:
+        return "Moderate risk: fall impact detected"
+    return r
+
+
 class TelegramBotService:
     def __init__(
         self,
@@ -51,6 +76,13 @@ class TelegramBotService:
             self.polling_task = None
             print("[TelegramBot] Polling worker stopped.")
 
+    def mini_app_keyboard(self, url: Optional[str] = None, text: str = "🚀 Open Caregiver Dashboard") -> Optional[dict]:
+        """Inline keyboard with a single button that opens the dashboard as a Telegram Mini App."""
+        target = url or self.app_url
+        if not target:
+            return None
+        return {"inline_keyboard": [[{"text": text, "web_app": {"url": target}}]]}
+
     async def setup_menu_button(self, app_url: str):
         """Configure Telegram persistent bottom menu button to open Mini App."""
         self.app_url = app_url
@@ -60,7 +92,7 @@ class TelegramBotService:
         payload = {
             "menu_button": {
                 "type": "web_app",
-                "text": "📱 เปิดแอปสุขภาพ",
+                "text": MINI_APP_BUTTON_TEXT,
                 "web_app": {
                     "url": app_url
                 }
@@ -146,7 +178,7 @@ class TelegramBotService:
         chat_id = str(message["chat"]["id"])
         user_text = message.get("text", "").strip()
         from_user = message.get("from", {})
-        user_name = from_user.get("first_name") or "คุณ"
+        user_name = from_user.get("first_name") or "there"
 
         # Update detected chat id
         if self.on_chat_id_discovered:
@@ -169,21 +201,9 @@ class TelegramBotService:
         """Return memory turns for a specific chat_id."""
         return self.chat_histories.get(chat_id, [])
 
-    async def ask_gemini(self, chat_id: str, user_text: str, language: str = "th") -> str:
-        """Unified method for processing text through commands and Gemini with live context.
-
-        language="en" is used by the English caregiver web dashboard: replies come back in
-        English from a neutral "Care Assistant" persona. Telegram keeps the default ("th").
-        """
+    async def ask_gemini(self, chat_id: str, user_text: str) -> str:
+        """Unified entry point for Telegram and the web dashboard chat: shortcut commands, then Gemini with live context."""
         cmd = user_text.lower().split()[0] if user_text else ""
-        is_en = (language or "th").lower().startswith("en")
-
-        if is_en:
-            if cmd == "/clear":
-                self.chat_histories[chat_id] = []
-                return "🧹 Conversation cleared. You can start a new question now."
-            sensor_context = self._format_sensor_context(self.get_sensor_data(), self.get_emergency_status())
-            return await self._call_gemini_chat(chat_id, user_text, user_text, sensor_context, language="en")
 
         if cmd == "/status":
             return self._build_status_text()
@@ -196,7 +216,7 @@ class TelegramBotService:
 
         if cmd == "/clear":
             self.chat_histories[chat_id] = []
-            return "🧹 *ล้างประวัติการสนทนาเรียบร้อยแล้วครับ!*\nคุณสามารถเริ่มต้นถามคำถามใหม่ได้ทันทีครับ"
+            return "🧹 *Conversation cleared.*\nYou can start a new question now."
 
         # Prepare Sensor Context for Gemini
         sensor_data = self.get_sensor_data()
@@ -206,11 +226,14 @@ class TelegramBotService:
         # Pre-process built-in command shortcuts
         prompt_override = None
         if cmd == "/weather":
-            prompt_override = f"ผู้ใช้ต้องการทราบรายงานสภาพอากาศและสภาพแวดล้อมในห้องขณะนี้ กรุณานำข้อมูลเซนเซอร์จริงต่อไปนี้มารายงานแบบน่าฟัง: {sensor_context} พร้อมแนะนำความสบายของบรรยากาศและการดื่มน้ำสั้นๆ"
+            prompt_override = ("Give the caregiver a short report on the room conditions around the wearer right now, "
+                               "using the live sensor data, and say whether it is comfortable and whether the wearer should drink some water.")
         elif cmd == "/food":
-            prompt_override = "ผู้ใช้ต้องการคำแนะนำมื้ออาหารเพื่อสุขภาพ (โภชนาการสมดุล ย่อยง่าย เหมาะกับสุขภาพร่างกาย) กรุณาแนะนำ 1-2 เมนูอย่างน่ารับประทานพร้อมประโยชน์"
+            prompt_override = ("Suggest 1-2 healthy, easy-to-digest meal ideas suitable for an older adult, "
+                               "with one line on why each is good.")
         elif cmd == "/exercise":
-            prompt_override = "ผู้ใช้ต้องการคำแนะนำท่าออกกำลังกายหรือการยืดเหยียดที่ปลอดภัยและช่วยป้องกันการล้ม (เน้นการทรงตัว ยืดเหยียดกล้ามเนื้อ ไม่หักโหม) กรุณาแนะนำ 2 ท่าแบบเป็นขั้นตอนเข้าใจง่าย"
+            prompt_override = ("Suggest 2 safe exercises or stretches that improve balance and help prevent falls for an older adult, "
+                               "as short step-by-step instructions a caregiver can guide.")
 
         query_text = prompt_override or user_text
         return await self._call_gemini_chat(chat_id, query_text, user_text, sensor_context)
@@ -223,21 +246,21 @@ class TelegramBotService:
         hum = s.get("humidity", "--") if is_conn else "--"
         press = s.get("pressure", "--") if is_conn else "--"
         rssi = s.get("rssi", "--") if is_conn else "--"
-        updated = s.get("last_updated") or "รอการเชื่อมต่อ..."
+        updated = s.get("last_updated") or "waiting for the device..."
         is_em = em.get("active", False)
-        em_badge = "🚨 *ตรวจพบการล้ม (EMERGENCY ACTIVE!)*" if is_em else "✅ *ปลอดภัย (ปกติ)*"
-        conn_badge = "🟢 *เชื่อมต่ออยู่ (Online)*" if is_conn else "🔴 *ขาดการเชื่อมต่อ (Offline)*"
+        em_badge = "🚨 *Fall detected - EMERGENCY ACTIVE*" if is_em else "✅ *Safe*"
+        conn_badge = "🟢 *Online*" if is_conn else "🔴 *Offline*"
 
         return (
-            f"📊 *สถานะเซนเซอร์บนบอร์ด Cucumber RS*\n\n"
-            f"📡 *สถานะบอร์ด:* {conn_badge}\n"
-            f"🌡️ *อุณหภูมิ (HTS221):* `{temp} °C`\n"
-            f"💧 *ความชื้นสัมพัทธ์ (HTS221):* `{hum} %RH`\n"
-            f"🌪️ *ความกดอากาศ (BMP280):* `{press} hPa`\n"
-            f"📶 *สัญญาณ Wi-Fi:* `{rssi} dBm`\n"
-            f"⏱️ *อัปเดตล่าสุด:* `{updated}`\n"
-            f"🛡️ *สถานะความปลอดภัย:* {em_badge}\n\n"
-            f"💡 *เคล็ดลับ:* คุณสามารถเปิดหน้าแดชบอร์ดเต็มจอได้ที่ปุ่มเมนูด้านล่างครับ"
+            f"📊 *Wearable device status*\n\n"
+            f"📡 *Device:* {conn_badge}\n"
+            f"🌡️ *Room temperature:* `{temp} °C`\n"
+            f"💧 *Humidity:* `{hum} %RH`\n"
+            f"🌪️ *Air pressure:* `{press} hPa`\n"
+            f"📶 *Wi-Fi signal:* `{rssi} dBm`\n"
+            f"⏱️ *Last update:* `{updated}`\n"
+            f"🛡️ *Wearer safety:* {em_badge}\n\n"
+            f"💡 *Tip:* tap *{MINI_APP_BUTTON_TEXT}* below to see the full dashboard."
         )
 
     def _build_falls_report(self) -> str:
@@ -249,23 +272,23 @@ class TelegramBotService:
 
         if today_count == 0:
             msg = (
-                "🛡️ *รายงานสถิติการล้มประจำวันนี้*\n\n"
-                "✅ *วันนี้ไม่พบเหตุการณ์การล้ม* ผู้สวมใส่อยู่ในสภาวะปลอดภัย ปกติดีครับ"
+                "🛡️ *Today's fall report*\n\n"
+                "✅ *No falls detected today.* The wearer is safe."
             )
             if yesterday_count > 0:
-                msg += f"\n*(สถิติย้อนหลัง: เมื่อวานพบการล้ม {yesterday_count} ครั้ง)*"
+                msg += f"\n_(Yesterday: {yesterday_count} fall{'s' if yesterday_count != 1 else ''})_"
             return msg
 
-        msg = f"🚨 *รายงานสถิติการล้มวันนี้ (พบทั้งหมด {today_count} ครั้ง)*\n\n"
+        msg = f"🚨 *Today's fall report ({today_count} fall{'s' if today_count != 1 else ''})*\n\n"
         for idx, inc in enumerate(incidents, 1):
             time = inc.get("time", "--:--")
             g = inc.get("max_g", 0.0)
-            risk = inc.get("risk", "ปานกลาง")
-            msg += f"• *ครั้งที่ {idx}* ({time} น.): แรงกระแทก `{g} G` | {risk}\n"
+            risk = translate_risk(inc.get("risk"))
+            msg += f"• *#{idx}* ({time}): impact `{g} G` | {risk}\n"
 
         if yesterday_count > 0:
-            msg += f"\n*(สถิติย้อนหลัง: เมื่อวานพบการล้ม {yesterday_count} ครั้ง)*\n"
-        msg += "\n⚠️ *คำแนะนำ:* กรุณาตรวจสอบผู้สวมใส่และบริเวณรอบๆ ทันทีครับ"
+            msg += f"\n_(Yesterday: {yesterday_count} fall{'s' if yesterday_count != 1 else ''})_\n"
+        msg += "\n⚠️ *Action:* please check on the wearer and the area around them."
         return msg
 
     def _build_lifestyle_report(self) -> str:
@@ -278,20 +301,21 @@ class TelegramBotService:
         avg_h = ls.get("avg_hum", "--")
         date = ls.get("date", datetime.now().strftime("%Y-%m-%d"))
 
-        score_badge = "🟢 ยอดเยี่ยม" if score >= 80 else ("🟡 ควรระวัง" if score >= 50 else "🔴 เสี่ยงสูง")
+        score_badge = "🟢 Good" if score >= 80 else ("🟡 Needs attention" if score >= 50 else "🔴 High risk")
 
         overview_text = (
-            "วันนี้ไม่พบการล้ม สภาพแวดล้อมในห้องเหมาะสม แนะนำทำกิจวัตรตามปกติและดื่มน้ำสม่ำเสมอครับ"
+            "No falls today and the room conditions are suitable. Keep to the usual routine and encourage regular drinks of water."
             if today_count == 0 else
-            f"วันนี้พบการล้ม {today_count} ครั้ง สภาพแวดล้อมอาจมีปัจจัยเสี่ยง แนะนำให้ผู้ดูแลสังเกตการเดินและประเมินอาการอย่างใกล้ชิดครับ"
+            f"{today_count} fall{'s' if today_count != 1 else ''} today; the environment may be a risk factor. "
+            "Watch the wearer's walking closely and check how they are feeling."
         )
 
         return (
-            f"📋 *สรุปการใช้ชีวิตและสุขภาวะประจำวัน ({date})*\n\n"
-            f"🏅 *คะแนนสุขภาวะ (Activity Score):* `{score}/100` [{score_badge}]\n"
-            f"🚨 *การล้มวันนี้:* `{today_count} ครั้ง`\n"
-            f"🌡️ *สภาพแวดล้อมเฉลี่ยในห้อง:* อุณหภูมิ `{avg_t} °C` | ความชื้น `{avg_h} %RH`\n\n"
-            f"💡 *สรุปภาพรวม:* {overview_text}"
+            f"📋 *Daily wellbeing summary ({date})*\n\n"
+            f"🏅 *Activity score:* `{score}/100` [{score_badge}]\n"
+            f"🚨 *Falls today:* `{today_count}`\n"
+            f"🌡️ *Average room conditions:* temperature `{avg_t} °C` | humidity `{avg_h} %RH`\n\n"
+            f"💡 *Overview:* {overview_text}"
         )
 
     def _format_sensor_context(self, s: dict, em: dict) -> str:
@@ -301,12 +325,14 @@ class TelegramBotService:
         hum = s.get("humidity", "--")
         press = s.get("pressure", "--")
         last_updated = s.get("last_updated")
-        em_status = "🚨 เกิดเหตุการณ์ล้ม (กำลังรอความช่วยเหลือ)" if em.get("active") else "✅ ปกติ ปลอดภัย"
+        em_status = "🚨 Fall detected - waiting for help" if em.get("active") else "✅ Normal, safe"
 
         if not is_conn or not last_updated:
-            sensor_str = "สถานะเซนเซอร์สด: ⚠️ บอร์ด Cucumber RS ขาดการเชื่อมต่อ (Offline เกิน 15 วินาที) หากผู้ใช้ถามเรื่องสภาพห้องปัจจุบัน ให้แจ้งผู้ใช้ว่าบอร์ดออฟไลน์อยู่"
+            sensor_str = ("Live sensors: ⚠️ the Cucumber RS device is OFFLINE (no data for over 15 seconds). "
+                          "If asked about the current room conditions, tell the caregiver the device is offline.")
         else:
-            sensor_str = f"ข้อมูลเซนเซอร์สดขณะนี้: อุณหภูมิ {temp} °C (HTS221), ความชื้น {hum} %RH (HTS221), ความกดอากาศ {press} hPa (BMP280), อัปเดตล่าสุด {last_updated}"
+            sensor_str = (f"Live sensors now: temperature {temp} °C, humidity {hum} %RH, "
+                          f"air pressure {press} hPa, last update {last_updated}")
 
         # Fall incident stats from SQLite
         f_data = self.get_fall_history()
@@ -315,26 +341,26 @@ class TelegramBotService:
         yesterday_count = f_data.get("yesterday_count", 0)
 
         if today_count == 0:
-            falls_str = "สถิติการล้มวันนี้: วันนี้ยังไม่มีบันทึกการล้ม (ล้ม 0 ครั้ง ปลอดภัย)"
+            falls_str = "Falls today: none recorded (0 falls, safe)"
         else:
             incident_lines = []
             for idx, inc in enumerate(incidents, 1):
-                incident_lines.append(f"  - ครั้งที่ {idx} เวลา {inc['time']} น.: แรงกระแทก {inc['max_g']}G, ระดับความรุนแรง/บริบท: {inc['risk']}")
-            falls_str = f"สถิติการล้มวันนี้: พบการล้มทั้งหมด {today_count} ครั้ง ได้แก่:\n" + "\n".join(incident_lines)
+                incident_lines.append(f"  - #{idx} at {inc['time']}: impact {inc['max_g']} G, risk: {translate_risk(inc['risk'])}")
+            falls_str = f"Falls today: {today_count} in total:\n" + "\n".join(incident_lines)
 
-        recent_stats_str = f"สถิติย้อนหลัง: เมื่อวานพบการล้ม {yesterday_count} ครั้ง"
+        recent_stats_str = f"Yesterday: {yesterday_count} falls"
 
         # Lifestyle & activity stats from SQLite
         ls = self.get_lifestyle_summary()
         lifestyle_str = (
-            f"ข้อมูลสุขภาวะและการใช้ชีวิตวันนี้: คะแนน Activity Score = {ls.get('score', 85)}/100, "
-            f"อุณหภูมิห้องเฉลี่ยทั้งวัน = {ls.get('avg_temp', '--')} °C, ความชื้นเฉลี่ยทั้งวัน = {ls.get('avg_hum', '--')} %RH, "
-            f"จำนวนตัวอย่าง Telemetry ทั้งวัน = {ls.get('total_telemetry_samples', 0)} ครั้ง"
+            f"Today's wellbeing data: activity score = {ls.get('score', 85)}/100, "
+            f"average room temperature = {ls.get('avg_temp', '--')} °C, average humidity = {ls.get('avg_hum', '--')} %RH, "
+            f"telemetry samples today = {ls.get('total_telemetry_samples', 0)}"
         )
 
         return (
             f"1. {sensor_str}\n"
-            f"   สถานะความปลอดภัย: {em_status}\n\n"
+            f"   Safety status: {em_status}\n\n"
             f"2. {falls_str}\n"
             f"   {recent_stats_str}\n\n"
             f"3. {lifestyle_str}"
@@ -342,80 +368,47 @@ class TelegramBotService:
 
     async def _cmd_help(self, chat_id: str, user_name: str):
         msg = (
-            f"🥒 *สวัสดีครับคุณ {user_name}! ผมคือ น้องแตงกวา (Cucumber AI)*\n"
-            f"ผู้ช่วยอัจฉริยะด้านสุขภาพและบริบทแวดล้อม ประจำบอร์ด *Cucumber RS*\n\n"
-            f"📱 *ใหม่! คุณสามารถเปิด Telegram Mini App ได้ทันที*\n"
-            f"เพื่อดูแดชบอร์ดเซนเซอร์สด กราฟความเคลื่อนไหว และแชทคุยกับผมได้ในหน้าต่างเดียว ไม่ต้องสลับเบราว์เซอร์ครับ!\n\n"
-            f"💬 *หรือพิมพ์คุยในช่องแชทนี้ได้เลย:*\n"
-            f"• 🚨 *\"วันนี้ล้มทั้งหมดกี่ครั้ง รุนแรงแค่ไหน\"*\n"
-            f"• 📋 *\"การใช้ชีวิตและสุขภาพประจำวันวันนี้เป็นอย่างไร\"*\n"
-            f"• 🌡️ *\"สภาพอากาศในห้องตอนนี้เป็นอย่างไร ร้อนไหม\"*\n"
-            f"• 🏃 *\"มีท่าออกกำลังกายหรือยืดเหยียดป้องกันการล้มไหม\"*\n\n"
-            f"⚡ *คำสั่งลัด:* /status, /falls, /summary, /weather, /food, /exercise, /clear"
+            f"👋 *Hello {user_name}! I'm the {ASSISTANT_NAME}*\n"
+            f"I help caregivers keep an eye on the person wearing the *Cucumber RS* fall-detection device.\n\n"
+            f"📱 *Open the caregiver dashboard*\n"
+            f"Tap *{MINI_APP_BUTTON_TEXT}* (next to the message box) or the button below to see live readings, "
+            f"movement charts, fall incidents and chat with me - all inside Telegram.\n\n"
+            f"💬 *Or just ask me here, for example:*\n"
+            f"• 🚨 *\"How many falls were there today, and how serious?\"*\n"
+            f"• 📋 *\"How has the wearer's day been?\"*\n"
+            f"• 🌡️ *\"Is the room comfortable right now?\"*\n"
+            f"• 🏃 *\"Any exercises to help prevent falls?\"*\n\n"
+            f"⚡ *Shortcuts:* /status, /falls, /summary, /weather, /food, /exercise, /clear\n\n"
+            f"🔔 You will get an alert in this chat as soon as a fall is detected."
         )
-        reply_markup = None
-        if self.app_url:
-            reply_markup = {
-                "inline_keyboard": [
-                    [
-                        {
-                            "text": "🚀 เปิด Cucumber RS Mini App",
-                            "web_app": {"url": self.app_url}
-                        }
-                    ]
-                ]
-            }
-        await self.send_reply(chat_id, msg, reply_markup=reply_markup)
+        await self.send_reply(chat_id, msg, reply_markup=self.mini_app_keyboard())
 
-    async def _call_gemini_chat(self, chat_id: str, query_for_ai: str, original_user_text: str, sensor_context: str, language: str = "th") -> str:
+    async def _call_gemini_chat(self, chat_id: str, query_for_ai: str, original_user_text: str, sensor_context: str) -> str:
         """Call Google Gemini 2.5 Flash with multi-turn memory and live sensor context."""
-        is_en = (language or "th").lower().startswith("en")
         if not self.gemini_api_key:
-            return "Sorry, the Google Gemini API key has not been configured." if is_en else "ขออภัยครับ ยังไม่ได้ตั้งค่า Google Gemini API Key ในระบบ"
+            return "Sorry, the Google Gemini API key has not been configured."
 
         if chat_id not in self.chat_histories:
             self.chat_histories[chat_id] = []
 
         history = self.chat_histories[chat_id]
 
-        system_instruction = f"""คุณคือ "น้องแตงกวา (Cucumber AI)" ผู้ช่วยอัจฉริยะด้านสุขภาพ กายภาพบำบัด และบริบทสิ่งแวดล้อม ประจำอุปกรณ์สวมใส่ Cucumber RS
-บุคลิกของคุณ: อบอุ่น สุภาพ ใส่ใจ เป็นมิตร ให้คำปรึกษาที่เข้าใจง่าย น่าเชื่อถือ ตรงไปตรงมา
-
-ข้อมูลเซนเซอร์สด สถิติการล้มจริง และข้อมูลการใช้ชีวิตประจำวันจากฐานข้อมูล:
-{sensor_context}
-
-แนวทางการตอบคำถาม:
-1. ด้านประวัติการล้มและความรุนแรง:
-   - หากผู้ใช้ถามว่า "วันนี้ล้มกี่ครั้ง", "มีคนล้มไหม", "ประวัติการล้ม", "การล้มรุนแรงแค่ไหน", "กี่โมง":
-     ให้นำข้อมูลจริงจาก "สถิติการล้มวันนี้" ด้านบนมาตอบผู้ใช้โดยตรง
-     * ข้อกำหนดสำคัญ: "รายงานแบบสรุปย่อ สั้น กระชับ ตรงประเด็น (1-2 บรรทัด)" ระบุจำนวนครั้ง เวลาที่เกิด และระดับความรุนแรง (แรงกระแทก G) ชัดเจน ไม่เวิ่นเว้อ
-     - หากวันนี้พบการล้ม: แจ้งจำนวนครั้ง เวลา และระดับแรงกระแทก G พร้อมให้คำแนะนำตรวจดูผู้สวมใส่
-     - หากวันนี้ไม่พบการล้ม (0 ครั้ง): แจ้งสั้นๆ ว่า วันนี้ปลอดภัยดี ไม่พบประวัติการล้มครับ
-     - หากผู้ใช้ถามถึงวันก่อนหน้า (เช่น เมื่อวาน): ตอบตาม "สถิติย้อนหลัง" ที่มีอย่างกระชับ
-2. ด้านการใช้ชีวิตประจำวันและสุขภาวะ:
-   - หากผู้ใช้ถามถึง "การใช้ชีวิตประจำวัน", "สุขภาพเป็นอย่างไร", "กิจวัตรวันนี้":
-     ให้ตอบสรุปสั้นๆ 2-3 บรรทัด โดยระบุคะแนนสุขภาวะ (Activity Score), สภาพแวดล้อมห้องเฉลี่ยทั้งวัน (อุณหภูมิ/ความชื้น) พร้อมสรุปภาพรวมและให้คำแนะนำสั้นๆ 1 ประโยค
-3. ด้านสภาพอากาศ/สิ่งแวดล้อม:
-   - หากผู้ใช้ถามเรื่องอากาศ อุณหภูมิ ร้อนไหม ในห้องเป็นอย่างไร: ให้นำตัวเลขจริงจากข้อมูลเซนเซอร์สดมาตอบ
-4. ด้านอื่นๆ (อาหาร, ออกกำลังกาย): ให้คำแนะนำสั้นๆ มีประโยชน์ เข้าใจง่าย
-5. รูปแบบการตอบ: ใช้ภาษาไทยที่สุภาพ อ่านง่าย กระชับ ใช้ emoji ประกอบอย่างพอเหมาะ จัดข้อความเป็น Bullet points ให้อ่านสบายตา"""
-
-        if is_en:
-            system_instruction = f"""You are the "Care Assistant" for the Cucumber RS wearable fall-detection system.
+        system_instruction = f"""You are the "{ASSISTANT_NAME}" for the Cucumber RS wearable fall-detection system.
 You support CAREGIVERS (family members, nurses, care staff) who look after the person wearing the device ("the wearer").
 Tone: calm, warm, professional and concise. Never call yourself by any other name.
 
-Live sensor data, real fall statistics and today's daily-living data from the database (may be written in Thai - translate as needed):
+Live sensor data, real fall statistics and today's daily-living data from the database:
 {sensor_context}
 
 How to answer:
 1. Falls: when asked how many falls happened, when, or how severe - answer from the fall statistics above in 1-2 short lines
    (count, time, impact in G). If there were falls, advise the caregiver to check on the wearer. If none, say today has been safe.
+   If asked about yesterday, answer from the yesterday figure.
 2. Daily wellbeing: summarise the activity score and average room temperature/humidity in 2-3 lines, plus one practical tip.
 3. Room environment: use the real live sensor numbers. If the device is offline, say so clearly.
 4. Other topics (fall prevention, exercise, nutrition, home safety): short, practical advice a caregiver can act on.
    Do not diagnose; recommend contacting a medical professional when symptoms sound serious.
-5. Format: reply in English only, short bullet points, sparing use of emoji."""
+5. Format: reply in English only (even if the question is in another language), short bullet points, sparing use of emoji."""
 
         contents = []
         for turn in history[-8:]:
@@ -453,10 +446,6 @@ How to answer:
 
                     return ai_reply
                 else:
-                    if is_en:
-                        return f"Sorry, the AI service is temporarily unavailable (code {res.status_code})."
-                    return f"ขออภัยครับ ระบบ AI ขัดข้องชั่วคราว (Code: {res.status_code})"
+                    return f"Sorry, the AI service is temporarily unavailable (code {res.status_code})."
         except Exception as e:
-            if is_en:
-                return f"Sorry, there was a problem contacting the AI service: {str(e)}"
-            return f"ขออภัยครับ เกิดข้อผิดพลาดในการติดต่อ AI: {str(e)}"
+            return f"Sorry, there was a problem contacting the AI service: {str(e)}"

@@ -508,13 +508,13 @@
       return `${Math.floor(sec / 3600)} h ago`;
     }
 
-    // Backend stores the risk assessment in Thai (it is also sent to Telegram). Translate for this English dashboard.
+    // Risk assessments are stored in English; incidents recorded before the switch are in Thai, so map both.
     function translateRisk(risk) {
       const r = String(risk || '');
-      if (r.includes('ความชื้น')) return { level: 'crit', text: 'Very high risk — unusually high humidity; possible slip on a wet or bathroom floor' };
-      if (r.includes('อุณหภูมิ')) return { level: 'crit', text: 'High risk — unusually high temperature; possible heat stroke or fainting' };
+      if (r.includes('ความชื้น') || /humidity/i.test(r)) return { level: 'crit', text: 'Very high risk — unusually high humidity; possible slip on a wet or bathroom floor' };
+      if (r.includes('อุณหภูมิ') || /temperature/i.test(r)) return { level: 'crit', text: 'High risk — unusually high temperature; possible heat stroke or fainting' };
       if (r.includes('3.5')) return { level: 'crit', text: 'High risk — severe impact (over 3.5 G); check for head injury or fractures' };
-      if (r.includes('ปานกลาง')) return { level: 'warn', text: 'Moderate risk — fall impact detected' };
+      if (r.includes('ปานกลาง') || /moderate/i.test(r)) return { level: 'warn', text: 'Moderate risk — fall impact detected' };
       return { level: 'warn', text: r || 'Fall detected' };
     }
 
@@ -996,7 +996,7 @@
       try {
         const res = await fetch('/api/ai/daily-summary', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ api_key: apiKey || null, language: 'en' })
+          body: JSON.stringify({ api_key: apiKey || null })
         });
         const data = await res.json();
         if (res.ok) {
@@ -1138,7 +1138,7 @@
       try {
         const res = await fetch('/api/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: currentChatId, message: text, language: 'en' })
+          body: JSON.stringify({ chat_id: currentChatId, message: text })
         });
         const data = await res.json();
         $(tempId)?.remove();

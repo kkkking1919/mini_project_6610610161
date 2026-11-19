@@ -11,12 +11,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-# Load environment variables from .env if present
-load_dotenv()
+# Load environment variables from .env if present.
+# override=True: docker-compose injects .env as a snapshot taken when the container was created,
+# but /api/config/tunnel-url rewrites TUNNEL_URL in the (mounted) file at runtime; the file must win,
+# otherwise every restart re-registers the Telegram Mini App button with a stale tunnel URL.
+load_dotenv(override=True)
 
 from database import init_db, get_db, SessionLocal
 from models import FallEvent, Telemetry, DailySummary, BANGKOK_TZ, get_bangkok_now_str, get_bangkok_date_str
-from telegram_bot import TelegramBotService
+from telegram_bot import TelegramBotService, MINI_APP_BUTTON_TEXT, translate_risk
 
 # Initialize SQLite tables
 init_db()
@@ -225,12 +228,11 @@ async def shutdown_event():
 class ChatMessageRequest(BaseModel):
     chat_id: str = "web_user"
     message: str
-    language: str = "th"
 
 @app.post("/api/chat")
 async def chat_with_ai(body: ChatMessageRequest):
     cid = body.chat_id or "web_user"
-    reply = await tg_bot_service.ask_gemini(cid, body.message, language=body.language)
+    reply = await tg_bot_service.ask_gemini(cid, body.message)
     return {"status": "success", "reply": reply}
 
 @app.get("/api/chat/history")
@@ -278,7 +280,6 @@ class AISummaryRequest(BaseModel):
     api_key: Optional[str] = None
     telegram_token: Optional[str] = None
     telegram_chat_id: Optional[str] = None
-    language: Optional[str] = None  # "en" -> English report for the caregiver web dashboard
 
 class TelegramTestPayload(BaseModel):
     token: Optional[str] = None
@@ -289,12 +290,12 @@ async def send_telegram_alert(token: str, chat_id: str, message: str) -> dict:
     bot_token = token or TELEGRAM_BOT_TOKEN
     target_chat_id = chat_id or cached_chat_id or await get_or_detect_chat_id(bot_token)
     if not bot_token:
-        return {"status": "error", "message": "ไม่ได้ตั้งค่า Telegram Bot Token"}
+        return {"status": "error", "message": "Telegram bot token is not configured"}
     if not target_chat_id:
         print("Telegram alert skipped: No chat_id detected yet. Please message @bercuncu_bot.")
         return {
             "status": "waiting_chat",
-            "message": "ยังไม่พบ Chat ID กรุณาเปิด Telegram ค้นหา @bercuncu_bot แล้วกด Start หรือส่งข้อความทักทายก่อนครับ"
+            "message": "No chat ID yet. Open @bercuncu_bot in Telegram and press Start (or send it a message) first."
         }
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -331,9 +332,9 @@ async def test_telegram_alert(body: TelegramTestPayload = TelegramTestPayload())
     tok = body.token or TELEGRAM_BOT_TOKEN
     cid = body.chat_id or TELEGRAM_CHAT_ID
     msg = body.message or (
-        "🔔 *ทดสอบการแจ้งเตือนจาก Cucumber RS Edge-AI!*\n\n"
-        "✅ บอทเชื่อมต่อกับระบบสำเร็จเรียบร้อยแล้ว\n"
-        "พร้อมรับการแจ้งเตือนอุบัติเหตุการล้มแบบเรียลไทม์ และสรุปรายงานสุขภาวะด้วย AI ครับ 🚑"
+        "🔔 *Test alert from the Cucumber RS caregiver system*\n\n"
+        "✅ The bot is connected.\n"
+        "You will receive real-time fall alerts and AI incident summaries in this chat. 🚑"
     )
     result = await send_telegram_alert(tok, cid, msg)
     return result
@@ -385,21 +386,12 @@ async def update_tunnel_url(body: TunnelUrlPayload, x_test_mode: Optional[str] =
     target_chat = cached_chat_id or TELEGRAM_CHAT_ID
     if target_chat and TELEGRAM_BOT_TOKEN:
         notify_msg = (
-            f"🚀 *เซิร์ฟเวอร์ออนไลน์พร้อมใช้งาน (Server Online!)*\n\n"
-            f"🔗 *URL เว็บ Dashboard & Telegram Mini App:*\n"
+            f"🚀 *Server online*\n\n"
+            f"🔗 *Caregiver dashboard & Telegram Mini App URL:*\n"
             f"`{new_url}`\n\n"
-            f"📱 แตะปุ่ม *'📱 เปิดแอปสุขภาพ'* ที่แถบเมนูด้านล่าง หรือกดปุ่มด้านล่างเพื่อเปิดใช้งานได้ทันทีครับ"
+            f"📱 Tap *{MINI_APP_BUTTON_TEXT}* next to the message box, or the button below, to open it."
         )
-        reply_markup = {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "🚀 เปิด Cucumber RS Mini App",
-                        "web_app": {"url": new_url}
-                    }
-                ]
-            ]
-        }
+        reply_markup = tg_bot_service.mini_app_keyboard(new_url)
         asyncio.create_task(tg_bot_service.send_reply(target_chat, notify_msg, reply_markup=reply_markup))
 
     return {
@@ -503,13 +495,13 @@ async def receive_fall_event(payload: FallEventPayload, db: Session = Depends(ge
     press = round(payload.pressure, 2) if payload.pressure is not None else latest_data["pressure"]
 
     # Context-aware risk evaluation
-    risk_level = "เสี่ยงปานกลาง: ตรวจพบแรงกระแทกจากการล้ม"
+    risk_level = "Moderate risk: fall impact detected"
     if hum >= 75:
-        risk_level = "🚨 เสี่ยงสูงมาก: ความชื้นสูงผิดปกติ (อาจลื่นล้มในห้องน้ำ/พื้นเปียก)"
+        risk_level = "🚨 Very high risk: unusually high humidity (possible slip on a wet or bathroom floor)"
     elif temp >= 38.0:
-        risk_level = "🚨 เสี่ยงสูง: อุณหภูมิสูงผิดปกติ (อาจมีภาวะ Heat Stroke/หมดสติ)"
+        risk_level = "🚨 High risk: unusually high temperature (possible heat stroke or fainting)"
     elif max_g >= 3.5:
-        risk_level = "⚠️ เสี่ยงสูง: แรงกระแทกสูงรุนแรง (> 3.5G) เฝ้าระวังศีรษะ/กระดูกหัก"
+        risk_level = "⚠️ High risk: severe impact (> 3.5 G) - check for head injury or fractures"
 
     # Save to SQLite (automatically routed to test_fall.db if X-Test-Mode is set)
     event = FallEvent(
@@ -541,14 +533,14 @@ async def receive_fall_event(payload: FallEventPayload, db: Session = Depends(ge
     if not is_test:
         # Dispatch Real Telegram Alert
         msg = (
-            f"🚨 *แจ้งเตือนเหตุฉุกเฉิน: ตรวจพบการล้ม (Fall Detected!)*\n\n"
-            f"📅 *เวลา:* `{timestamp}`\n"
-            f"⚡ *แรงกระแทกสูงสุด:* `{max_g} G`\n"
-            f"🌡️ *อุณหภูมิบริบท:* `{temp} °C`\n"
-            f"💧 *ความชื้นบริบท:* `{hum} %RH`\n"
-            f"🌪️ *ความกดอากาศ:* `{press} hPa`\n"
-            f"🔍 *ประเมินบริบท:* {risk_level}\n\n"
-            f"👉 *กรุณาตรวจสอบผู้ใช้งานทันที!*"
+            f"🚨 *EMERGENCY: Fall detected!*\n\n"
+            f"📅 *Time:* `{timestamp}`\n"
+            f"⚡ *Peak impact:* `{max_g} G`\n"
+            f"🌡️ *Room temperature:* `{temp} °C`\n"
+            f"💧 *Humidity:* `{hum} %RH`\n"
+            f"🌪️ *Air pressure:* `{press} hPa`\n"
+            f"🔍 *Risk assessment:* {risk_level}\n\n"
+            f"👉 *Please check on the wearer immediately!*"
         )
         await send_telegram_alert(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, msg)
     else:
@@ -618,11 +610,8 @@ async def clear_history():
 @app.post("/api/ai/daily-summary")
 async def generate_ai_daily_summary(body: AISummaryRequest, db: Session = Depends(get_db)):
     api_key = body.api_key or GEMINI_API_KEY_ENV
-    is_en = (body.language or "th").lower().startswith("en")
     if not api_key:
-        detail = ("Please provide a Google Gemini API key to use this feature."
-                  if is_en else "กรุณาระบุ Google Gemini API Key เพื่อใช้งานฟังก์ชันนี้ครับ")
-        raise HTTPException(status_code=400, detail=detail)
+        raise HTTPException(status_code=400, detail="Please provide a Google Gemini API key to use this feature.")
 
     today_str = get_bangkok_date_str()
     
@@ -638,39 +627,19 @@ async def generate_ai_daily_summary(body: AISummaryRequest, db: Session = Depend
 
     fall_details = ""
     for f in falls:
-        fall_details += f"- เวลา {f.timestamp}: แรงกระแทก {f.max_g}G, ความชื้น {f.humidity}%, อุณหภูมิ {f.temperature}°C, ความกดอากาศ {f.pressure} hPa, การประเมิน: {f.context_risk}\n"
-    if not fall_details:
-        fall_details = "ไม่มีบันทึกเหตุการณ์การล้มในวันนี้ (ปลอดภัย)"
+        fall_details += (f"- {f.timestamp}: impact {f.max_g} G, humidity {f.humidity}%, temperature {f.temperature} °C, "
+                         f"pressure {f.pressure} hPa, risk: {translate_risk(f.context_risk)}\n")
 
     if falls_count > 0:
-        incident_data = f"บันทึกเหตุการณ์การล้มที่เกิดขึ้นในวันนี้ ({today_str}) ทั้งหมด {falls_count} ครั้ง:\n{fall_details}"
+        incident_data = f"Fall incidents recorded today ({today_str}): {falls_count} in total:\n{fall_details}"
     else:
-        incident_data = f"ไม่มีบันทึกเหตุการณ์การล้มในวันนี้ ({today_str}) (สถานะ: ปลอดภัย)"
+        incident_data = f"No fall incidents recorded today ({today_str}) (status: safe)"
 
-    # Formulate Concise Fall Incident & Context Gemini Prompt
+    # Concise fall incident & context prompt for Gemini
     prompt = f"""
-คุณเป็นระบบ AI รายงานเหตุการณ์การล้มและบริบทสิ่งแวดล้อม สำหรับอุปกรณ์สวมใส่ Cucumber RS
-หน้าที่: รายงานสรุปแบบ "สั้น กระชับ ตรงประเด็น (ไม่เวิ่นเว้อ)" โดยรายงานเฉพาะ "เหตุการณ์การล้มและบริบทสิ่งแวดล้อมขณะเกิดเหตุ" เท่านั้น
-ข้อห้าม: ไม่ต้องเกริ่นนำหรือลงท้ายยาว, ไม่ต้องวิเคราะห์กิจวัตรทั่วไป, และไม่ต้องให้คำแนะนำทางการแพทย์ที่ยาวเกินไป
-
-ข้อมูลเหตุการณ์:
-{incident_data}
-
-ข้อกำหนดรูปแบบการตอบ (ความยาวสั้นกระชับ):
-- กรณีตรวจพบการล้ม:
-  รายงานเป็น Bullet points สั้นๆ ชัดเจนสำหรับเหตุการณ์ที่เกิดขึ้น:
-  • 🚨 **เหตุการณ์ล้ม:** ระบุเวลา, แรงกระแทก (G) และระดับความรุนแรง
-  • 🌡️ **บริบทสิ่งแวดล้อมขณะเกิดเหตุ:** อุณหภูมิ, ความชื้น, และปัจจัยเสี่ยงจากสิ่งแวดล้อมขณะนั้น (เช่น ความชื้นสูงเสี่ยงพื้นลื่นในห้องน้ำ หรืออากาศร้อนเสี่ยงวูบ/เป็นลม)
-  • ⚠️ **ข้อควรระวังเร่งด่วน:** คำแนะนำสั้นๆ 1 ประโยคสำหรับผู้ดูแล
-- กรณีไม่พบการล้ม:
-  รายงานสั้นๆ 1-2 บรรทัดว่า: วันนี้ไม่พบเหตุการณ์การล้ม ผู้สวมใส่อยู่ในสภาวะปลอดภัย บริบทสภาพแวดล้อมอยู่ในเกณฑ์ปกติ
-"""
-
-    if is_en:
-        prompt = f"""
 You are an incident-reporting assistant for the Cucumber RS wearable fall-detection system.
 The reader is a CAREGIVER. Write a short, to-the-point report in ENGLISH covering only today's fall incidents
-and the environmental context at the time of each incident. The incident data below may be written in Thai - translate it.
+and the environmental context at the time of each incident.
 Do not add a long introduction or closing, do not analyse general routines, and do not give lengthy medical advice.
 
 Incident data:
@@ -705,8 +674,7 @@ Response format (keep it brief):
                 res_json = res.json()
                 ai_text = res_json['candidates'][0]['content']['parts'][0]['text']
         except Exception as e2:
-            prefix = "Gemini API request failed" if is_en else "เกิดข้อผิดพลาดในการเรียก Gemini API"
-            raise HTTPException(status_code=500, detail=f"{prefix}: {str(e2)}")
+            raise HTTPException(status_code=500, detail=f"Gemini API request failed: {str(e2)}")
 
     # Save to SQLite
     score = max(100 - (falls_count * 30), 20)
@@ -722,8 +690,8 @@ Response format (keep it brief):
     # Also dispatch summary to Telegram if available
     try:
         tg_summary_msg = (
-            f"🚨 *รายงานสรุปเหตุการณ์การล้มและบริบทแวดล้อม (Fall Incident & Context)*\n"
-            f"📅 *วันที่:* `{today_str}` | 🚨 *พบการล้ม:* `{falls_count} ครั้ง`\n\n"
+            f"📋 *Daily fall incident summary*\n"
+            f"📅 *Date:* `{today_str}` | 🚨 *Falls:* `{falls_count}`\n\n"
             f"{ai_text[:3500]}"
         )
         await send_telegram_alert(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, tg_summary_msg)

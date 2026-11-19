@@ -21,7 +21,7 @@ class FallEvent(Base):
     temperature = Column(Float, nullable=True)
     humidity = Column(Float, nullable=True)
     pressure = Column(Float, nullable=True)
-    context_risk = Column(String, default="ปานกลาง")
+    context_risk = Column(String, default="Moderate risk: fall impact detected")
     status = Column(String, default="PENDING")  # PENDING, RESOLVED
 
 class Telemetry(Base):
