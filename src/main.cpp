@@ -23,8 +23,8 @@ const char* serverUrl_lan_telemetry    = "http://172.20.10.5:8080/api/sensor-dat
 const char* serverUrl_lan_fall         = "http://172.20.10.5:8080/api/fall-event";
 
 // 2. Cloudflare Public Tunnel (Auto-fallback: bypasses Windows Firewall / NAT and works across any network)
-const char* serverUrl_tunnel_telemetry = "https://wiring-oxford-chips-november.trycloudflare.com/api/sensor-data";
-const char* serverUrl_tunnel_fall      = "https://wiring-oxford-chips-november.trycloudflare.com/api/fall-event";
+const char* serverUrl_tunnel_telemetry = "https://proposed-border-following-union.trycloudflare.com/api/sensor-data";
+const char* serverUrl_tunnel_fall      = "https://proposed-border-following-union.trycloudflare.com/api/fall-event";
 
 // เซนเซอร์ออนบอร์ด
 Adafruit_HTS221 hts;
